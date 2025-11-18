@@ -15,6 +15,7 @@ export const SnagDetailModal: React.FC<Props> = ({ snag, onClose }) => {
   const [photos, setPhotos] = useState<SnagPhoto[]>([]);
   const [comments, setComments] = useState<SnagComment[]>([]);
   const [activity, setActivity] = useState<ActivityLog[]>([]);
+  const [creatorName, setCreatorName] = useState<string>('unknown');
 
   useEffect(() => {
     const fetchDetails = async () => {
@@ -23,11 +24,23 @@ export const SnagDetailModal: React.FC<Props> = ({ snag, onClose }) => {
       setPhotos(photoData || []);
       const { data: commentData } = await supabase.from('snag_comments').select('*').eq('snag_id', snag.id);
       setComments((commentData as SnagComment[]) || []);
+      let name = creatorName;
+      if (snag.created_by) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', snag.created_by)
+          .maybeSingle();
+        if (profile?.full_name) {
+          name = profile.full_name;
+          setCreatorName(profile.full_name);
+        }
+      }
       setActivity([
         {
           id: 'created',
           snag_id: snag.id,
-          message: `Created by ${snag.created_by || 'unknown'}`,
+          message: `Created by ${name}`,
         },
       ]);
     };
