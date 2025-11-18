@@ -91,9 +91,9 @@ export const SnagDetailModal: React.FC<Props> = ({ snag, onClose }) => {
           </div>
           <div className="space-y-2 rounded-lg border border-slate-200 p-3">
             <p className="text-xs uppercase tracking-wide text-slate-500">Photos</p>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
               {photos.map((photo) => (
-                <img key={photo.id} src={photo.photo_url} className="h-20 w-full rounded-lg object-cover" />
+                <img key={photo.id} src={photo.photo_url} className="h-32 w-full rounded-lg object-cover" />
               ))}
             </div>
             <FileUpload

@@ -42,7 +42,7 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, onPlanUploaded, snags, on
       </div>
       {planUrl ? (
         isPdf ? (
-          <div className="relative aspect-video overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+          <div className="relative aspect-[4/3] overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
             <iframe
               src={`${planUrl}#toolbar=0`}
               title="Floor plan PDF"
@@ -57,7 +57,7 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, onPlanUploaded, snags, on
           <div
             ref={containerRef}
             onClick={handleClick}
-            className="relative aspect-video overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
+            className="relative aspect-[4/3] overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
             onMouseMove={(e) => {
               if (!containerRef.current) return;
               const rect = containerRef.current.getBoundingClientRect();
