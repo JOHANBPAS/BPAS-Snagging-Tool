@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { ChecklistField, Profile, Snag, SnagPriority, SnagStatus } from '../types';
+import { useAuth } from '../hooks/useAuth';
 
 interface Props {
   projectId: string;
@@ -13,6 +14,7 @@ const priorities: SnagPriority[] = ['low', 'medium', 'high', 'critical'];
 const statuses: SnagStatus[] = ['open', 'in_progress', 'completed', 'verified'];
 
 export const SnagForm: React.FC<Props> = ({ projectId, onCreated, checklistFields = [], contractors = [] }) => {
+  const { user } = useAuth();
   const [form, setForm] = useState<Partial<Snag>>({
     title: '',
     description: '',
@@ -31,12 +33,16 @@ export const SnagForm: React.FC<Props> = ({ projectId, onCreated, checklistField
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canSave) return;
+    if (!canSave || !user) {
+      setError(!user ? 'You must be signed in to create a snag.' : null);
+      return;
+    }
     setLoading(true);
     setError(null);
     const payload = {
       ...form,
       project_id: projectId,
+      created_by: user.id,
     } as Snag;
     const { data, error: insertError } = await supabase.from('snags').insert(payload).select('*').single();
     if (insertError) {

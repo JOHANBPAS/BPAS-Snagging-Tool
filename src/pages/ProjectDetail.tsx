@@ -6,10 +6,12 @@ import { SnagDetailModal } from '../components/SnagDetailModal';
 import { SnagForm } from '../components/SnagForm';
 import { SnagList } from '../components/SnagList';
 import { supabase } from '../lib/supabaseClient';
+import { useAuth } from '../hooks/useAuth';
 import { ChecklistField, Project, Snag } from '../types';
 
 const ProjectDetail: React.FC = () => {
   const { projectId } = useParams();
+  const { user } = useAuth();
   const [project, setProject] = useState<Project | null>(null);
   const [snags, setSnags] = useState<Snag[]>([]);
   const [selected, setSelected] = useState<Snag | null>(null);
@@ -91,10 +93,14 @@ const ProjectDetail: React.FC = () => {
             planUrl={project.plan_image_url}
             snags={snags}
             onPlanUploaded={async (url) => {
-              await supabase.from('projects').update({ plan_image_url: url }).eq('id', project.id);
+              await supabase
+                .from('projects')
+                .update({ plan_image_url: url, created_by: project.created_by || user?.id })
+                .eq('id', project.id);
               setProject((prev) => (prev ? { ...prev, plan_image_url: url } : prev));
             }}
             onCreateFromPlan={async ({ x, y }) => {
+              if (!user) return;
               const newSnag: Partial<Snag> = {
                 project_id: project.id,
                 title: 'Pin drop snag',
@@ -102,6 +108,7 @@ const ProjectDetail: React.FC = () => {
                 priority: 'medium',
                 plan_x: x,
                 plan_y: y,
+                created_by: user.id,
               };
               await supabase.from('snags').insert(newSnag);
               fetchSnags();

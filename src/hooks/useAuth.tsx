@@ -21,14 +21,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const getProfile = async (userId: string) => {
-      const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
+    const ensureProfile = async (userId: string, userEmail?: string, userMetadata?: Record<string, any>) => {
+      const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
       if (data) {
         setProfile({
           id: data.id,
           full_name: data.full_name ?? '',
           role: (data.role as Profile['role']) ?? 'architect',
           created_at: data.created_at ?? undefined,
+        });
+        return;
+      }
+
+      const fullName = (userMetadata?.full_name as string) || userEmail?.split('@')[0] || 'User';
+      const role = ((userMetadata?.role as Profile['role']) ?? 'architect') as Profile['role'];
+
+      const { data: inserted } = await supabase
+        .from('profiles')
+        .upsert({ id: userId, full_name: fullName, role })
+        .select('*')
+        .single();
+
+      if (inserted) {
+        setProfile({
+          id: inserted.id,
+          full_name: inserted.full_name ?? fullName,
+          role: (inserted.role as Profile['role']) ?? role,
+          created_at: inserted.created_at ?? undefined,
         });
       }
     };
@@ -39,7 +58,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } = await supabase.auth.getSession();
       const currentUser = session?.user ?? null;
       setUser(currentUser);
-      if (currentUser) await getProfile(currentUser.id);
+      if (currentUser) await ensureProfile(currentUser.id, currentUser.email ?? undefined, currentUser.user_metadata);
       setLoading(false);
     };
 
@@ -47,7 +66,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const nextUser = session?.user ?? null;
       setUser(nextUser);
       if (nextUser) {
-        getProfile(nextUser.id);
+        ensureProfile(nextUser.id, nextUser.email ?? undefined, nextUser.user_metadata);
       } else {
         setProfile(null);
       }

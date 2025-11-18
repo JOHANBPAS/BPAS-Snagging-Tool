@@ -96,6 +96,8 @@ create policy "Update own profile" on public.profiles
 -- Projects: allow owner to manage, others read
 create policy "Project owners manage" on public.projects
   for all using (created_by = auth.uid()) with check (created_by = auth.uid());
+create policy "Projects claim unowned" on public.projects
+  for update using (created_by is null) with check (created_by = auth.uid());
 create policy "Projects readable" on public.projects
   for select using (true);
 

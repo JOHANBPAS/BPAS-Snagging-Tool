@@ -36,7 +36,7 @@ export const FileUpload: React.FC<Props> = ({ label = 'Upload file', bucket, onU
     <div className="space-y-1">
       <label className="flex cursor-pointer items-center justify-between rounded-lg border border-dashed border-brand/40 bg-brand/5 px-3 py-2 text-sm font-semibold text-brand">
         <span>{uploading ? 'Uploading…' : label}</span>
-        <input type="file" className="hidden" onChange={handleChange} accept="image/*" />
+        <input type="file" className="hidden" onChange={handleChange} accept="image/*,application/pdf" />
       </label>
       {error && <p className="text-xs text-rose-600">{error}</p>}
     </div>

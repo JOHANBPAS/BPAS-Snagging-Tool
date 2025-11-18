@@ -2,8 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { ProjectCard } from '../components/ProjectCard';
 import { supabase } from '../lib/supabaseClient';
 import { Project } from '../types';
+import { useAuth } from '../hooks/useAuth';
 
 const Projects: React.FC = () => {
+  const { user, profile } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [form, setForm] = useState<Partial<Project>>({ name: '' });
   const [loading, setLoading] = useState(false);
@@ -20,9 +22,17 @@ const Projects: React.FC = () => {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name) return;
+    if (!form.name || !user) return;
     setLoading(true);
     setError(null);
+    // Ensure a profile exists for the current user to satisfy FK constraints
+    if (!profile) {
+      await supabase.from('profiles').upsert({
+        id: user.id,
+        full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
+        role: (user.user_metadata?.role as string) || 'architect',
+      });
+    }
     const { error: insertError } = await supabase.from('projects').insert({
       name: form.name,
       client_name: form.client_name,
@@ -30,6 +40,7 @@ const Projects: React.FC = () => {
       start_date: form.start_date,
       end_date: form.end_date,
       status: 'active',
+      created_by: user.id,
     });
     if (insertError) setError(insertError.message);
     await fetchProjects();

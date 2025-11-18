@@ -13,6 +13,7 @@ interface Props {
 export const PlanViewer: React.FC<Props> = ({ planUrl, onPlanUploaded, snags, onCreateFromPlan }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState<{ x: number; y: number } | null>(null);
+  const isPdf = planUrl?.toLowerCase().includes('.pdf');
 
   const markers = useMemo(
     () =>
@@ -40,34 +41,48 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, onPlanUploaded, snags, on
         <FileUpload label="Upload plan" bucket="plans" onUploaded={onPlanUploaded} />
       </div>
       {planUrl ? (
-        <div
-          ref={containerRef}
-          onClick={handleClick}
-          className="relative aspect-video overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
-          onMouseMove={(e) => {
-            if (!containerRef.current) return;
-            const rect = containerRef.current.getBoundingClientRect();
-            setHovered({ x: (e.clientX - rect.left) / rect.width, y: (e.clientY - rect.top) / rect.height });
-          }}
-          onMouseLeave={() => setHovered(null)}
-        >
-          <img src={planUrl} className="h-full w-full object-contain" />
-          {markers.map((marker) => (
-            <div
-              key={marker.id}
-              className="absolute flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-rose-500 text-xs font-bold text-white"
-              style={{ left: `${marker.x * 100}%`, top: `${marker.y * 100}%` }}
-              title={marker.title}
-            >
-              !
-            </div>
-          ))}
-          {hovered && (
-            <div className="absolute bottom-2 right-2 rounded-lg bg-black/60 px-2 py-1 text-xs text-white">
-              {`${(hovered.x * 100).toFixed(1)}%, ${(hovered.y * 100).toFixed(1)}%`}
-            </div>
-          )}
-        </div>
+        isPdf ? (
+          <div className="relative aspect-video overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+            <iframe
+              src={`${planUrl}#toolbar=0`}
+              title="Floor plan PDF"
+              className="h-full w-full"
+              allowFullScreen
+            />
+            <p className="absolute bottom-2 right-2 rounded bg-black/60 px-2 py-1 text-xs text-white">
+              PDF preview (pin placement disabled)
+            </p>
+          </div>
+        ) : (
+          <div
+            ref={containerRef}
+            onClick={handleClick}
+            className="relative aspect-video overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
+            onMouseMove={(e) => {
+              if (!containerRef.current) return;
+              const rect = containerRef.current.getBoundingClientRect();
+              setHovered({ x: (e.clientX - rect.left) / rect.width, y: (e.clientY - rect.top) / rect.height });
+            }}
+            onMouseLeave={() => setHovered(null)}
+          >
+            <img src={planUrl} className="h-full w-full object-contain" />
+            {markers.map((marker) => (
+              <div
+                key={marker.id}
+                className="absolute flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-rose-500 text-xs font-bold text-white"
+                style={{ left: `${marker.x * 100}%`, top: `${marker.y * 100}%` }}
+                title={marker.title}
+              >
+                !
+              </div>
+            ))}
+            {hovered && (
+              <div className="absolute bottom-2 right-2 rounded-lg bg-black/60 px-2 py-1 text-xs text-white">
+                {`${(hovered.x * 100).toFixed(1)}%, ${(hovered.y * 100).toFixed(1)}%`}
+              </div>
+            )}
+          </div>
+        )
       ) : (
         <p className="text-sm text-slate-600">Upload a floor plan to start placing snag markers.</p>
       )}
