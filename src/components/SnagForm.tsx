@@ -75,7 +75,7 @@ export const SnagForm: React.FC<Props> = ({ projectId, onCreated, checklistField
         <button
           type="submit"
           disabled={!canSave || loading}
-          className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white shadow hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-60"
+          className="btn-primary disabled:cursor-not-allowed disabled:opacity-60"
         >
           {loading ? 'Saving...' : 'Save'}
         </button>

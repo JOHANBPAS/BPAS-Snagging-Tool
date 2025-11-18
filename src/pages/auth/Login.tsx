@@ -21,45 +21,42 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
-      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-lg">
-        <div className="mb-4 text-center">
-          <p className="text-xs uppercase tracking-wide text-slate-500">BPAS Snagging App</p>
-          <h1 className="text-2xl font-bold text-slate-900">Welcome back</h1>
-          <p className="text-sm text-slate-600">Sign in to manage your projects and snags.</p>
+    <div className="flex min-h-screen items-center justify-center bg-bpas-black px-4">
+      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/95 p-6 shadow-2xl">
+        <div className="mb-4 text-center space-y-1">
+          <p className="text-xs uppercase tracking-[0.3em] text-bpas-grey font-syne">bpas architects</p>
+          <h1 className="text-2xl font-syne font-semibold text-bpas-black">Welcome back</h1>
+          <div className="mx-auto h-0.5 w-12 bg-bpas-yellow" />
+          <p className="text-sm font-raleway text-bpas-grey">Sign in to manage your projects and snags.</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-3">
           {error && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
-          <label className="space-y-1 text-sm">
-            <span className="text-slate-700">Email</span>
+          <label className="space-y-1 text-sm font-raleway">
+            <span className="text-bpas-grey">Email</span>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 focus:border-brand focus:outline-none"
+              className="w-full rounded-lg border border-bpas-grey/30 bg-bpas-light px-3 py-2 focus:border-bpas-yellow focus:outline-none"
             />
           </label>
-          <label className="space-y-1 text-sm">
-            <span className="text-slate-700">Password</span>
+          <label className="space-y-1 text-sm font-raleway">
+            <span className="text-bpas-grey">Password</span>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 focus:border-brand focus:outline-none"
+              className="w-full rounded-lg border border-bpas-grey/30 bg-bpas-light px-3 py-2 focus:border-bpas-yellow focus:outline-none"
             />
           </label>
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white shadow disabled:opacity-60"
-          >
+          <button type="submit" disabled={loading} className="btn-primary w-full">
             {loading ? 'Signing in...' : 'Sign in'}
           </button>
-          <div className="flex justify-between text-sm text-slate-600">
-            <Link className="text-brand" to="/reset-password">
+          <div className="flex justify-between text-sm font-raleway text-bpas-grey">
+            <Link className="text-bpas-yellow hover:text-yellow-500" to="/reset-password">
               Forgot password?
             </Link>
-            <Link className="text-brand" to="/register">
+            <Link className="text-bpas-yellow hover:text-yellow-500" to="/register">
               Create account
             </Link>
           </div>

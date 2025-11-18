@@ -75,3 +75,16 @@ The dev server runs at http://localhost:5173.
 
 - Policies in `supabase/schema.sql` scope access to project owners and authenticated users; adjust for your org rules (e.g., per-tenant filters).
 - Avoid exposing the service role key on the client; only use the anon key in `.env`.
+
+## BPAS branding
+
+- Brand primitives live in `tailwind.config.cjs` (colors + fonts) and `src/lib/brand.ts` (asset paths, contact copy). Global font imports and utility classes are defined in `src/index.css` (`font-syne`, `font-raleway`, `.btn-primary`, `.btn-secondary`, `.card`, `.section-accent`).
+- Place brand assets under `public/brand/` with these filenames:
+  - `logo-dark.png` (black on white), `logo-light.png` (white on dark)
+  - `fingerprint.png` (used for watermarking/empty states)
+  - `letterhead.png` (used in PDF/export header)
+  - You can add alt variants and point `brandAssets` to them.
+- Storage buckets: set `plans`, `snag-photos`, and `reports` to Public **or** add Storage policies for insert/select on the authenticated role.
+- PDF export (`src/components/ReportPreview.tsx`) pulls the letterhead/logo/fingerprint from `/brand/...`, applies BPAS colors to headings/status chips, and includes contact details from `brand.ts`. Keep the letterhead image sized to ~40px high when drawn across the page to preserve margins.
+- Buttons/components: use the provided utility classes to keep primary actions yellow on black, secondary actions grey on white, and headings in Syne with the yellow underline (`section-accent`).
+- If you change palette or fonts, update both `tailwind.config.cjs` and `brand.ts` for consistency across UI and exports.

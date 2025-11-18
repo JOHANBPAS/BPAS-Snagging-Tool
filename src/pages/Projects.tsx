@@ -50,45 +50,46 @@ const Projects: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-end">
+      <div className="card flex flex-col gap-3 bg-white/90 p-4 md:flex-row md:items-end">
         <div className="flex-1 space-y-2">
-          <p className="text-xs uppercase tracking-wide text-slate-500">Projects</p>
-          <h3 className="text-xl font-semibold text-slate-900">Create new project</h3>
+          <p className="text-xs uppercase tracking-wide text-bpas-grey font-syne">Projects</p>
+          <h3 className="text-xl font-syne font-semibold text-bpas-black">Create new project</h3>
+          <span className="section-accent" />
           <form onSubmit={handleCreate} className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
             <input
               value={form.name || ''}
               onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
               placeholder="Project name"
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-brand focus:outline-none"
+              className="w-full rounded-lg border border-bpas-grey/30 bg-bpas-light px-3 py-2 text-sm focus:border-bpas-yellow focus:outline-none"
             />
             <input
               value={form.client_name || ''}
               onChange={(e) => setForm((prev) => ({ ...prev, client_name: e.target.value }))}
               placeholder="Client"
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-brand focus:outline-none"
+              className="w-full rounded-lg border border-bpas-grey/30 bg-bpas-light px-3 py-2 text-sm focus:border-bpas-yellow focus:outline-none"
             />
             <input
               value={form.address || ''}
               onChange={(e) => setForm((prev) => ({ ...prev, address: e.target.value }))}
               placeholder="Address"
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-brand focus:outline-none"
+              className="w-full rounded-lg border border-bpas-grey/30 bg-bpas-light px-3 py-2 text-sm focus:border-bpas-yellow focus:outline-none"
             />
             <input
               type="date"
               value={form.start_date || ''}
               onChange={(e) => setForm((prev) => ({ ...prev, start_date: e.target.value }))}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-brand focus:outline-none"
+              className="w-full rounded-lg border border-bpas-grey/30 bg-bpas-light px-3 py-2 text-sm focus:border-bpas-yellow focus:outline-none"
             />
             <input
               type="date"
               value={form.end_date || ''}
               onChange={(e) => setForm((prev) => ({ ...prev, end_date: e.target.value }))}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-brand focus:outline-none"
+              className="w-full rounded-lg border border-bpas-grey/30 bg-bpas-light px-3 py-2 text-sm focus:border-bpas-yellow focus:outline-none"
             />
             <button
               type="submit"
               disabled={loading}
-              className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white shadow disabled:opacity-60"
+              className="btn-primary"
             >
               {loading ? 'Creating...' : 'Create project'}
             </button>

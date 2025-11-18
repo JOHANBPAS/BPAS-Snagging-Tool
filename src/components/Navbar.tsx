@@ -1,27 +1,42 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { brandAssets } from '../lib/brand';
 import { useAuth } from '../hooks/useAuth';
 
 export const Navbar: React.FC = () => {
   const { signOut, profile } = useAuth();
 
   return (
-    <header className="sticky top-0 z-20 bg-white/90 backdrop-blur border-b border-slate-200">
-      <div className="flex items-center justify-between px-4 py-3">
+    <header className="sticky top-0 z-20 border-b border-bpas-grey/30 bg-bpas-black text-white shadow">
+      <div className="flex items-center justify-between px-4 py-3 lg:px-8">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-lg bg-brand/10 text-brand flex items-center justify-center font-bold">BP</div>
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/10">
+            <img
+              src={brandAssets.logoLight}
+              alt="BPAS"
+              className="h-10 w-10 object-contain"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = 'none';
+              }}
+            />
+            <span className="sr-only">BPAS</span>
+          </div>
           <div>
-            <p className="text-xs uppercase tracking-wide text-slate-500">BPAS Snagging App</p>
-            <p className="text-sm text-slate-700">Digital snagging & handover</p>
+            <p className="text-xs uppercase tracking-[0.2em] text-bpas-light font-syne">BPAS architects</p>
+            <p className="text-sm font-raleway text-white/80">Beyond blueprints and boundaries.</p>
+            <span className="mt-1 inline-block h-0.5 w-12 bg-bpas-yellow" />
           </div>
         </div>
-        <div className="flex items-center gap-4 text-sm text-slate-700">
-          {profile && <span className="hidden sm:block">{profile.full_name} ({profile.role})</span>}
-          <Link to="/settings" className="hover:text-brand">Settings</Link>
-          <button
-            onClick={signOut}
-            className="rounded-lg bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700 hover:bg-slate-200"
-          >
+        <div className="flex items-center gap-4 text-sm font-raleway text-white">
+          {profile && (
+            <span className="hidden sm:block text-white/80">
+              {profile.full_name} ({profile.role})
+            </span>
+          )}
+          <Link to="/settings" className="font-syne text-bpas-yellow hover:text-yellow-400">
+            Settings
+          </Link>
+          <button onClick={signOut} className="btn-secondary px-4 py-2">
             Sign out
           </button>
         </div>
