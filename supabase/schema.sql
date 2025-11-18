@@ -7,6 +7,24 @@ create table if not exists public.profiles (
   created_at timestamptz default now()
 );
 
+-- Checklist templates
+create table if not exists public.checklist_templates (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  description text,
+  created_by uuid references public.profiles(id),
+  created_at timestamptz default now()
+);
+
+create table if not exists public.checklist_template_fields (
+  id uuid primary key default gen_random_uuid(),
+  template_id uuid references public.checklist_templates(id) on delete cascade,
+  label text not null,
+  type text check (type in ('text','number','select','checkbox')) not null,
+  options jsonb,
+  required boolean default false
+);
+
 -- Projects
 create table if not exists public.projects (
   id uuid primary key default gen_random_uuid(),
@@ -58,24 +76,6 @@ create table if not exists public.snag_comments (
   created_at timestamptz default now()
 );
 
--- Checklist templates
-create table if not exists public.checklist_templates (
-  id uuid primary key default gen_random_uuid(),
-  name text not null,
-  description text,
-  created_by uuid references public.profiles(id),
-  created_at timestamptz default now()
-);
-
-create table if not exists public.checklist_template_fields (
-  id uuid primary key default gen_random_uuid(),
-  template_id uuid references public.checklist_templates(id) on delete cascade,
-  label text not null,
-  type text check (type in ('text','number','select','checkbox')) not null,
-  options jsonb,
-  required boolean default false
-);
-
 -- Security and policies
 alter table public.profiles enable row level security;
 alter table public.projects enable row level security;
@@ -86,44 +86,44 @@ alter table public.checklist_templates enable row level security;
 alter table public.checklist_template_fields enable row level security;
 
 -- Basic policy: authenticated users can see their own profile
-create policy if not exists "Users can view own profile" on public.profiles
+create policy "Users can view own profile" on public.profiles
   for select using (auth.uid() = id);
-create policy if not exists "Insert own profile" on public.profiles
+create policy "Insert own profile" on public.profiles
   for insert with check (auth.uid() = id);
-create policy if not exists "Update own profile" on public.profiles
+create policy "Update own profile" on public.profiles
   for update using (auth.uid() = id);
 
 -- Projects: allow owner to manage, others read
-create policy if not exists "Project owners manage" on public.projects
+create policy "Project owners manage" on public.projects
   for all using (created_by = auth.uid()) with check (created_by = auth.uid());
-create policy if not exists "Projects readable" on public.projects
+create policy "Projects readable" on public.projects
   for select using (true);
 
 -- Snags: users can view snags for projects they can see; owners manage
-create policy if not exists "Snags readable" on public.snags
+create policy "Snags readable" on public.snags
   for select using (exists (select 1 from public.projects p where p.id = snags.project_id));
-create policy if not exists "Snags owned manage" on public.snags
+create policy "Snags owned manage" on public.snags
   for all using (created_by = auth.uid()) with check (created_by = auth.uid());
 
 -- Comments/photos follow project visibility
-create policy if not exists "Comments readable" on public.snag_comments
+create policy "Comments readable" on public.snag_comments
   for select using (exists (select 1 from public.snags s where s.id = snag_comments.snag_id));
-create policy if not exists "Comments insert" on public.snag_comments
+create policy "Comments insert" on public.snag_comments
   for insert with check (author_id = auth.uid());
 
-create policy if not exists "Photos readable" on public.snag_photos
+create policy "Photos readable" on public.snag_photos
   for select using (exists (select 1 from public.snags s where s.id = snag_photos.snag_id));
-create policy if not exists "Photos insert" on public.snag_photos
+create policy "Photos insert" on public.snag_photos
   for insert with check (true);
 
 -- Checklist templates: admin created by owner
-create policy if not exists "Templates readable" on public.checklist_templates
+create policy "Templates readable" on public.checklist_templates
   for select using (true);
-create policy if not exists "Templates manage own" on public.checklist_templates
+create policy "Templates manage own" on public.checklist_templates
   for all using (created_by = auth.uid()) with check (created_by = auth.uid());
 
-create policy if not exists "Template fields readable" on public.checklist_template_fields
+create policy "Template fields readable" on public.checklist_template_fields
   for select using (true);
-create policy if not exists "Template fields manage own" on public.checklist_template_fields
+create policy "Template fields manage own" on public.checklist_template_fields
   for all using (exists (select 1 from public.checklist_templates t where t.id = template_id and t.created_by = auth.uid()))
   with check (exists (select 1 from public.checklist_templates t where t.id = template_id and t.created_by = auth.uid()));
