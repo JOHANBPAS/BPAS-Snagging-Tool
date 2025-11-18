@@ -48,32 +48,14 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 
 ## Local development
 
-1. Install dependencies
+```bash
+npm install
+npm run dev
+```
 
-   ```bash
-   npm install
-   ```
+> Note: if npm registry access is restricted, install dependencies in an environment with internet access first.
 
-   > If your environment blocks registry access, install on a network with internet access, or mirror the npm registry locally.
-
-2. Create your `.env` from `.env.example` and supply your Supabase project URL and anon key.
-
-3. Start the dev server
-
-   ```bash
-   npm run dev
-   ```
-
-   Vite will serve the app at http://localhost:5173. All Supabase calls point to the project specified by your env vars.
-
-4. (Optional) Type-check and build the production bundle
-
-   ```bash
-   npm run build
-   npm run preview # serve the built bundle locally
-   ```
-
-5. (Optional) Lint placeholder is available for custom rules; replace the script in `package.json` with your preferred lint tool.
+The dev server runs at http://localhost:5173.
 
 ## Workflows
 
