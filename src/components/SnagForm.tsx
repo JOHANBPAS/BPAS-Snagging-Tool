@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { ChecklistField, Profile, Snag, SnagPriority, SnagStatus } from '../types';
+import { Database } from '../types/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { normalizeUuid } from '../lib/format';
 
@@ -100,7 +101,10 @@ export const SnagForm: React.FC<Props> = ({
         continue;
       }
       const { data: urlData } = bucket.getPublicUrl(path);
-      await supabase.from('snag_photos').insert({ snag_id: snagId, photo_url: urlData.publicUrl });
+      await supabase.from('snag_photos').insert({
+        snag_id: snagId,
+        photo_url: urlData.publicUrl,
+      } as Database['public']['Tables']['snag_photos']['Insert']);
     }
     setPendingPhotos([]);
   };
@@ -130,7 +134,7 @@ export const SnagForm: React.FC<Props> = ({
         };
         const { data, error: updateError } = await supabase
           .from('snags')
-          .update(updates)
+          .update(updates as Database['public']['Tables']['snags']['Update'])
           .eq('id', initialSnag.id)
           .select('*')
           .single();
@@ -147,16 +151,19 @@ export const SnagForm: React.FC<Props> = ({
           plan_x: effectiveCoords.x,
           plan_y: effectiveCoords.y,
           plan_page: effectiveCoords.page,
-        } as Snag;
+        } as Database['public']['Tables']['snags']['Insert'];
+
         const { data, error: insertError } = await supabase.from('snags').insert(payload).select('*').single();
         if (insertError) throw insertError;
+        if (!data) throw new Error('Failed to create snag');
+
         result = data as Snag;
         if (checklistFields.length > 0) {
           await supabase.from('snag_comments').insert({
             snag_id: data.id,
             author_id: data.created_by,
             comment: `Custom fields: ${JSON.stringify(customValues)}`,
-          });
+          } as Database['public']['Tables']['snag_comments']['Insert']);
         }
         await uploadPhotos(result.id);
         onCreated?.(result);

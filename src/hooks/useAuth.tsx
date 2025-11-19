@@ -2,6 +2,9 @@ import { User } from '@supabase/supabase-js';
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { Profile } from '../types';
+import { Database } from '../types/supabase';
+
+type ProfileRow = Database['public']['Tables']['profiles']['Row'];
 
 interface AuthContextType {
   user: User | null;
@@ -23,12 +26,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const ensureProfile = async (userId: string, userEmail?: string, userMetadata?: Record<string, any>) => {
       const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+
       if (data) {
+        const profileData = data as ProfileRow;
         setProfile({
-          id: data.id,
-          full_name: data.full_name ?? '',
-          role: (data.role as Profile['role']) ?? 'architect',
-          created_at: data.created_at ?? undefined,
+          id: profileData.id,
+          full_name: profileData.full_name ?? '',
+          role: (profileData.role as Profile['role']) ?? 'architect',
+          created_at: profileData.created_at ?? undefined,
         });
         return;
       }
@@ -38,16 +43,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const { data: inserted } = await supabase
         .from('profiles')
-        .upsert({ id: userId, full_name: fullName, role })
+        .upsert({ id: userId, full_name: fullName, role } as Database['public']['Tables']['profiles']['Insert'])
         .select('*')
         .single();
 
       if (inserted) {
+        const insertedProfile = inserted as ProfileRow;
         setProfile({
-          id: inserted.id,
-          full_name: inserted.full_name ?? fullName,
-          role: (inserted.role as Profile['role']) ?? role,
-          created_at: inserted.created_at ?? undefined,
+          id: insertedProfile.id,
+          full_name: insertedProfile.full_name ?? fullName,
+          role: (insertedProfile.role as Profile['role']) ?? role,
+          created_at: insertedProfile.created_at ?? undefined,
         });
       }
     };
@@ -105,7 +111,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         id: data.user.id,
         full_name: fullName,
         role,
-      });
+      } as Database['public']['Tables']['profiles']['Insert']);
     }
     setLoading(false);
   };

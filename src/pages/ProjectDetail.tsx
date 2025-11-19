@@ -1,17 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { PlanViewer } from '../components/PlanViewer';
 import { ReportPreview } from '../components/ReportPreview';
-import { SnagDetailModal } from '../components/SnagDetailModal';
-import { SnagForm } from '../components/SnagForm';
-import { SnagList } from '../components/SnagList';
 import { supabase } from '../lib/supabaseClient';
-import { useAuth } from '../hooks/useAuth';
 import { ChecklistField, Project, Snag } from '../types';
+import { ProjectHeader } from '../components/project/ProjectHeader';
+import { PlanManager } from '../components/project/PlanManager';
+import { SnagManager } from '../components/project/SnagManager';
 
 const ProjectDetail: React.FC = () => {
   const { projectId } = useParams();
-  const { user } = useAuth();
   const [project, setProject] = useState<Project | null>(null);
   const [snags, setSnags] = useState<Snag[]>([]);
   const [selected, setSelected] = useState<Snag | null>(null);
@@ -63,46 +60,11 @@ const ProjectDetail: React.FC = () => {
     return { total, statusCounts, completedPct };
   }, [snags]);
 
-  const handleSnagDeleted = async (snag: Snag) => {
-    if (!window.confirm('Are you sure you want to delete this snag? This action cannot be undone.')) return;
-    const { data: photos } = await supabase.from('snag_photos').select('*').eq('snag_id', snag.id);
-    if (photos?.length) {
-      const bucket = supabase.storage.from('snag-photos');
-      const files = photos
-        .map((photo) => photo.photo_url.split('/storage/v1/object/public/snag-photos/')[1])
-        .filter(Boolean) as string[];
-      if (files.length) {
-        await bucket.remove(files);
-      }
-      await supabase.from('snag_photos').delete().eq('snag_id', snag.id);
-    }
-    await supabase.from('snag_comments').delete().eq('snag_id', snag.id);
-    await supabase.from('snags').delete().eq('id', snag.id);
-    if (selected?.id === snag.id) setSelected(null);
-    fetchSnags();
-  };
-
   if (!project) return <p className="p-4 text-slate-700">Loading project...</p>;
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-slate-500">Project</p>
-            <h2 className="text-2xl font-semibold text-slate-900">{project.name}</h2>
-            <p className="text-sm text-slate-600">{project.address}</p>
-            <p className="text-sm text-slate-600">Client: {project.client_name}</p>
-          </div>
-          <div className="w-full max-w-xs rounded-lg bg-bpas-light p-3 text-sm text-bpas-black">
-            <p className="font-syne font-semibold text-bpas-black">Progress</p>
-            <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-bpas-grey/20">
-              <div className="h-full bg-bpas-yellow" style={{ width: `${summary.completedPct}%` }} />
-            </div>
-            <p className="text-xs font-raleway text-bpas-grey">{summary.completedPct}% verified</p>
-          </div>
-        </div>
-      </div>
+      <ProjectHeader project={project} completedPct={summary.completedPct} />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-3 space-y-4">
@@ -112,16 +74,11 @@ const ProjectDetail: React.FC = () => {
         </div>
       </div>
 
-      <PlanViewer
-        planUrl={project.plan_image_url}
+      <PlanManager
+        project={project}
         snags={snags}
-        onPlanUploaded={async (url) => {
-          await supabase
-            .from('projects')
-            .update({ plan_image_url: url, created_by: project.created_by || user?.id })
-            .eq('id', project.id);
-          setProject((prev) => (prev ? { ...prev, plan_image_url: url } : prev));
-        }}
+        editingSnag={editingSnag}
+        onProjectUpdate={setProject}
         onSelectLocation={({ x, y, page }) => {
           if (editingSnag) {
             setEditCoords({ x, y, page });
@@ -130,52 +87,23 @@ const ProjectDetail: React.FC = () => {
           }
         }}
       />
-      <p className="text-xs font-raleway text-bpas-grey">
-        Tap the plan to {editingSnag ? 'reposition the snag being edited' : 'start a new snag capture'}.
-      </p>
 
-      <div className="w-full space-y-4">
-        <SnagList snags={snags} onSelect={setSelected} onEdit={setEditingSnag} onDelete={handleSnagDeleted} />
-      </div>
-
-      {selected && (
-        <SnagDetailModal
-          snag={selected}
-          onClose={() => setSelected(null)}
-          onDelete={handleSnagDeleted}
-          onEdit={(snagToEdit) => setEditingSnag(snagToEdit)}
-        />
-      )}
-      {(editingSnag || createCoords) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-8">
-          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <SnagForm
-              projectId={project.id}
-              initialSnag={editingSnag || undefined}
-              coords={editingSnag ? editCoords : createCoords}
-              checklistFields={checklistFields}
-              onCoordsClear={() => {
-                setEditCoords(null);
-                setCreateCoords(null);
-              }}
-              onCreated={() => {
-                fetchSnags();
-                setCreateCoords(null);
-              }}
-              onUpdated={() => {
-                fetchSnags();
-                setEditingSnag(null);
-                setEditCoords(null);
-              }}
-              onCancel={() => {
-                setEditingSnag(null);
-                setEditCoords(null);
-                setCreateCoords(null);
-              }}
-            />
-          </div>
-        </div>
-      )}
+      <SnagManager
+        project={project}
+        snags={snags}
+        checklistFields={checklistFields}
+        selected={selected}
+        editingSnag={editingSnag}
+        createCoords={createCoords}
+        editCoords={editCoords}
+        onSelect={setSelected}
+        onEdit={setEditingSnag}
+        onCoordsClear={() => {
+          setEditCoords(null);
+          setCreateCoords(null);
+        }}
+        onSnagChange={fetchSnags}
+      />
     </div>
   );
 };

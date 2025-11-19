@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ProjectCard } from '../components/ProjectCard';
 import { supabase } from '../lib/supabaseClient';
 import { Project } from '../types';
+import { Database } from '../types/supabase';
 import { useAuth } from '../hooks/useAuth';
 
 const Projects: React.FC = () => {
@@ -31,7 +32,7 @@ const Projects: React.FC = () => {
         id: user.id,
         full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
         role: (user.user_metadata?.role as string) || 'architect',
-      });
+      } as Database['public']['Tables']['profiles']['Insert']);
     }
     const { error: insertError } = await supabase.from('projects').insert({
       name: form.name,
@@ -41,7 +42,7 @@ const Projects: React.FC = () => {
       end_date: form.end_date,
       status: 'active',
       created_by: user.id,
-    });
+    } as Database['public']['Tables']['projects']['Insert']);
     if (insertError) setError(insertError.message);
     await fetchProjects();
     setForm({ name: '', client_name: '', address: '', start_date: '', end_date: '' });
@@ -74,18 +75,24 @@ const Projects: React.FC = () => {
               placeholder="Address"
               className="w-full rounded-lg border border-bpas-grey/30 bg-bpas-light px-3 py-2 text-sm focus:border-bpas-yellow focus:outline-none"
             />
-            <input
-              type="date"
-              value={form.start_date || ''}
-              onChange={(e) => setForm((prev) => ({ ...prev, start_date: e.target.value }))}
-              className="w-full rounded-lg border border-bpas-grey/30 bg-bpas-light px-3 py-2 text-sm focus:border-bpas-yellow focus:outline-none"
-            />
-            <input
-              type="date"
-              value={form.end_date || ''}
-              onChange={(e) => setForm((prev) => ({ ...prev, end_date: e.target.value }))}
-              className="w-full rounded-lg border border-bpas-grey/30 bg-bpas-light px-3 py-2 text-sm focus:border-bpas-yellow focus:outline-none"
-            />
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-slate-500">Start Date</label>
+              <input
+                type="date"
+                value={form.start_date || ''}
+                onChange={(e) => setForm((prev) => ({ ...prev, start_date: e.target.value }))}
+                className="w-full rounded-lg border border-bpas-grey/30 bg-bpas-light px-3 py-2 text-sm focus:border-bpas-yellow focus:outline-none"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-slate-500">End Date</label>
+              <input
+                type="date"
+                value={form.end_date || ''}
+                onChange={(e) => setForm((prev) => ({ ...prev, end_date: e.target.value }))}
+                className="w-full rounded-lg border border-bpas-grey/30 bg-bpas-light px-3 py-2 text-sm focus:border-bpas-yellow focus:outline-none"
+              />
+            </div>
             <button
               type="submit"
               disabled={loading}

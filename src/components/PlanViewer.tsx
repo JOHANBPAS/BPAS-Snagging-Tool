@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-// @ts-ignore
+
 import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist/legacy/build/pdf';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 const workerSrc = new URL('pdfjs-dist/legacy/build/pdf.worker.min.mjs', import.meta.url).toString();
