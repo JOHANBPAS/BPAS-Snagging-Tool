@@ -1,16 +1,17 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist/legacy/build/pdf';
+const workerSrc = new URL('pdfjs-dist/legacy/build/pdf.worker.min.mjs', import.meta.url).toString();
 import { Snag } from '../types';
 import { FileUpload } from './uploads/FileUpload';
 
 interface Props {
-  projectId: string;
   planUrl?: string | null;
   onPlanUploaded: (url: string) => void;
   snags: Snag[];
-  onCreateFromPlan: (coords: { x: number; y: number }) => void;
+  onSelectLocation: (coords: { x: number; y: number; page: number }) => void;
 }
 
-export const PlanViewer: React.FC<Props> = ({ planUrl, onPlanUploaded, snags, onCreateFromPlan }) => {
+export const PlanViewer: React.FC<Props> = ({ planUrl, onPlanUploaded, snags, onSelectLocation }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState<{ x: number; y: number } | null>(null);
@@ -18,23 +19,90 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, onPlanUploaded, snags, on
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const isPdf = planUrl?.toLowerCase().includes('.pdf');
-  const [renderedPlan, setRenderedPlan] = useState<string | null>(null);
+  const [imagePlan, setImagePlan] = useState<string | null>(null);
+  const [pdfPages, setPdfPages] = useState<string[]>([]);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [renderError, setRenderError] = useState<string | null>(null);
+  const [loadingPdf, setLoadingPdf] = useState(false);
+
+  const isPdf = Boolean(planUrl && planUrl.toLowerCase().endsWith('.pdf'));
+  const totalPages = planUrl ? (isPdf ? pdfPages.length : imagePlan ? 1 : 0) : 0;
+  const currentImage = isPdf ? pdfPages[currentPage] : imagePlan;
+  const currentPageNumber = totalPages ? currentPage + 1 : 1;
 
   const markers = useMemo(
     () =>
       snags
-        .filter((s) => s.plan_x && s.plan_y)
+        .filter(
+          (s) =>
+            s.plan_x != null &&
+            s.plan_y != null &&
+            (s.plan_page ?? 1) === currentPageNumber,
+        )
         .map((s) => ({ id: s.id, x: s.plan_x as number, y: s.plan_y as number, title: s.title })),
-    [snags],
+    [snags, currentPageNumber],
   );
 
+  const resetView = () => {
+    setScale(1);
+    setPan({ x: 0, y: 0 });
+    setHovered(null);
+  };
+
+  useEffect(() => {
+    resetView();
+    setCurrentPage(0);
+    if (!planUrl) {
+      setImagePlan(null);
+      setPdfPages([]);
+      setRenderError(null);
+      return;
+    }
+    if (isPdf) {
+      const load = async () => {
+        try {
+          setLoadingPdf(true);
+          GlobalWorkerOptions.workerSrc = workerSrc;
+          const resp = await fetch(planUrl);
+          if (!resp.ok) throw new Error('Failed to fetch PDF');
+          const buffer = await resp.arrayBuffer();
+          const pdf = await getDocument({ data: buffer }).promise;
+          const pages: string[] = [];
+          for (let pageIndex = 1; pageIndex <= pdf.numPages; pageIndex++) {
+            const page = await pdf.getPage(pageIndex);
+            const viewport = page.getViewport({ scale: 1.3 });
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            if (!ctx) continue;
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            await page.render({ canvasContext: ctx, viewport }).promise;
+            pages.push(canvas.toDataURL('image/jpeg', 0.85));
+          }
+          setPdfPages(pages);
+          setRenderError(null);
+        } catch (err) {
+          console.warn('PDF render failed', err);
+          setPdfPages([]);
+          setRenderError('PDF preview unavailable');
+        } finally {
+          setLoadingPdf(false);
+        }
+      };
+      load();
+    } else {
+      setImagePlan(planUrl);
+      setPdfPages([]);
+      setRenderError(null);
+    }
+  }, [planUrl, isPdf]);
+
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!containerRef.current) return;
+    if (!containerRef.current || !totalPages) return;
     const rect = containerRef.current.getBoundingClientRect();
     const x = (e.clientX - rect.left - pan.x) / (rect.width * scale);
     const y = (e.clientY - rect.top - pan.y) / (rect.height * scale);
-    onCreateFromPlan({ x: Number(x.toFixed(3)), y: Number(y.toFixed(3)) });
+    onSelectLocation({ x: Number(x.toFixed(3)), y: Number(y.toFixed(3)), page: currentPageNumber });
   };
 
   const clampScale = (next: number) => Math.min(3, Math.max(1, next));
@@ -57,38 +125,6 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, onPlanUploaded, snags, on
   };
 
   const endPan = () => setIsPanning(false);
-
-  // Render first page of PDF to image for pin support
-  React.useEffect(() => {
-    const renderPdf = async () => {
-      if (!isPdf || !planUrl) {
-        setRenderedPlan(null);
-        return;
-      }
-      try {
-        const pdfjs = await import('pdfjs-dist');
-        if ((pdfjs as any).GlobalWorkerOptions) {
-          (pdfjs as any).GlobalWorkerOptions.workerSrc =
-            `https://cdn.jsdelivr.net/npm/pdfjs-dist@${(pdfjs as any).version}/build/pdf.worker.min.js`;
-        }
-        const loadingTask = (pdfjs as any).getDocument(planUrl);
-        const pdf = await loadingTask.promise;
-        const page = await pdf.getPage(1);
-        const viewport = page.getViewport({ scale: 1.5 });
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d');
-        if (!context) return;
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        await page.render({ canvasContext: context, viewport }).promise;
-        setRenderedPlan(canvas.toDataURL('image/png'));
-      } catch (err) {
-        console.warn('PDF render failed', err);
-        setRenderedPlan(null);
-      }
-    };
-    renderPdf();
-  }, [isPdf, planUrl]);
 
   return (
     <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -118,9 +154,26 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, onPlanUploaded, snags, on
           <FileUpload label="Upload plan" bucket="plans" onUploaded={onPlanUploaded} />
         </div>
       </div>
+      {isPdf && pdfPages.length > 1 && (
+        <div className="flex flex-wrap gap-2">
+          {pdfPages.map((_, idx) => (
+            <button
+              key={`floor-${idx}`}
+              type="button"
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${idx === currentPage ? 'bg-bpas-yellow text-bpas-black' : 'bg-slate-100 text-slate-600'}`}
+              onClick={() => {
+                setCurrentPage(idx);
+                resetView();
+              }}
+            >
+              Floor {idx + 1}
+            </button>
+          ))}
+        </div>
+      )}
       {planUrl ? (
-        (isPdf && renderedPlan) || !isPdf ? (
-          <div className="relative min-h-[420px] overflow-auto rounded-lg border border-slate-200 bg-slate-100">
+        currentImage ? (
+          <div className="relative aspect-[16/9] w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
             <div
               ref={containerRef}
               onClick={handleClick}
@@ -143,7 +196,7 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, onPlanUploaded, snags, on
               }}
               onMouseUp={endPan}
               onMouseOut={endPan}
-              className="relative h-full min-h-[420px] w-full cursor-crosshair"
+              className="relative h-full w-full cursor-crosshair"
             >
               <div
                 ref={contentRef}
@@ -153,7 +206,7 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, onPlanUploaded, snags, on
                   transformOrigin: 'top left',
                 }}
               >
-                <img src={renderedPlan || planUrl} className="h-full w-full object-contain" />
+                <img src={currentImage} className="h-full w-full object-contain" />
                 {markers.map((marker) => (
                   <div
                     key={marker.id}
@@ -172,16 +225,18 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, onPlanUploaded, snags, on
               </div>
             </div>
           </div>
+        ) : loadingPdf ? (
+          <p className="text-sm text-slate-600">Rendering floor plan…</p>
         ) : (
-          <div className="relative min-h-[360px] overflow-auto rounded-lg border border-slate-200 bg-slate-50">
+          <div className="relative aspect-[16/9] w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
             <iframe
               src={`${planUrl}#toolbar=0`}
               title="Floor plan PDF"
-              className="h-full w-full min-h-[360px]"
+              className="h-full w-full"
               allowFullScreen
             />
             <p className="absolute bottom-2 right-2 rounded bg-black/60 px-2 py-1 text-xs text-white">
-              PDF preview (pin placement disabled)
+              {renderError || 'PDF preview (pin placement disabled)'}
             </p>
           </div>
         )

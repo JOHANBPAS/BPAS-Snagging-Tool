@@ -7,11 +7,13 @@ import { FileUpload } from './uploads/FileUpload';
 interface Props {
   snag: Snag | null;
   onClose: () => void;
+  onEdit?: (snag: Snag) => void;
+  onDelete?: (snag: Snag) => void;
 }
 
 const statuses: SnagStatus[] = ['open', 'in_progress', 'completed', 'verified'];
 
-export const SnagDetailModal: React.FC<Props> = ({ snag, onClose }) => {
+export const SnagDetailModal: React.FC<Props> = ({ snag, onClose, onEdit, onDelete }) => {
   const [photos, setPhotos] = useState<SnagPhoto[]>([]);
   const [comments, setComments] = useState<SnagComment[]>([]);
   const [activity, setActivity] = useState<ActivityLog[]>([]);
@@ -59,9 +61,23 @@ export const SnagDetailModal: React.FC<Props> = ({ snag, onClose }) => {
             <h3 className="text-2xl font-semibold text-slate-900">{snag.title}</h3>
             <p className="text-sm text-slate-600">{snag.description}</p>
           </div>
-          <button onClick={onClose} className="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-700">
-            Close
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => snag && onEdit?.(snag)}
+              className="rounded-lg border border-bpas-yellow/60 px-3 py-1 text-sm font-semibold text-bpas-black hover:bg-bpas-yellow/30"
+            >
+              Edit
+            </button>
+            <button
+              onClick={() => snag && onDelete?.(snag)}
+              className="rounded-lg border border-rose-200 px-3 py-1 text-sm font-semibold text-rose-600 hover:bg-rose-50"
+            >
+              Delete
+            </button>
+            <button onClick={onClose} className="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-700">
+              Close
+            </button>
+          </div>
         </div>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2">

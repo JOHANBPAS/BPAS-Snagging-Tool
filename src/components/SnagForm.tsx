@@ -1,19 +1,37 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { ChecklistField, Profile, Snag, SnagPriority, SnagStatus } from '../types';
 import { useAuth } from '../hooks/useAuth';
+import { normalizeUuid } from '../lib/format';
 
 interface Props {
   projectId: string;
   onCreated?: (snag: Snag) => void;
+  onUpdated?: (snag: Snag) => void;
+  onCancel?: () => void;
+  initialSnag?: Snag | null;
   checklistFields?: ChecklistField[];
   contractors?: Profile[];
+  coords?: { x: number; y: number; page: number } | null;
+  onCoordsClear?: () => void;
 }
 
 const priorities: SnagPriority[] = ['low', 'medium', 'high', 'critical'];
 const statuses: SnagStatus[] = ['open', 'in_progress', 'completed', 'verified'];
 
-export const SnagForm: React.FC<Props> = ({ projectId, onCreated, checklistFields = [], contractors = [] }) => {
+type PendingPhoto = { file: File; preview: string };
+
+export const SnagForm: React.FC<Props> = ({
+  projectId,
+  onCreated,
+  onUpdated,
+  onCancel,
+  initialSnag = null,
+  checklistFields = [],
+  contractors = [],
+  coords = null,
+  onCoordsClear,
+}) => {
   const { user } = useAuth();
   const [form, setForm] = useState<Partial<Snag>>({
     title: '',
@@ -24,44 +42,135 @@ export const SnagForm: React.FC<Props> = ({ projectId, onCreated, checklistField
   const [customValues, setCustomValues] = useState<Record<string, string | number | boolean>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingPhotos, setPendingPhotos] = useState<PendingPhoto[]>([]);
+  const isEditing = Boolean(initialSnag);
 
-  const canSave = useMemo(() => form.title && form.title.length > 2, [form.title]);
+  const effectiveCoords =
+    coords ??
+    (initialSnag && initialSnag.plan_x != null && initialSnag.plan_y != null
+      ? { x: initialSnag.plan_x, y: initialSnag.plan_y, page: initialSnag.plan_page ?? 1 }
+      : null);
+
+  useEffect(() => {
+    if (initialSnag) {
+      setForm({
+        title: initialSnag.title,
+        description: initialSnag.description ?? '',
+        priority: initialSnag.priority,
+        status: initialSnag.status,
+        location: initialSnag.location ?? '',
+        category: initialSnag.category ?? '',
+        due_date: initialSnag.due_date ?? '',
+        assigned_to: initialSnag.assigned_to ?? '',
+      });
+    }
+  }, [initialSnag]);
+
+  const canSave = useMemo(() => Boolean(form.title && form.title.length > 2 && effectiveCoords), [form.title, effectiveCoords]);
 
   const handleChange = (key: keyof Snag, value: any) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
+  const handlePhotoSelect = (files: FileList | null) => {
+    if (!files) return;
+    const next = Array.from(files).map((file) => ({
+      file,
+      preview: URL.createObjectURL(file),
+    }));
+    setPendingPhotos((prev) => [...prev, ...next]);
+  };
+
+  useEffect(() => {
+    return () => {
+      pendingPhotos.forEach((photo) => URL.revokeObjectURL(photo.preview));
+    };
+  }, [pendingPhotos]);
+
+  const uploadPhotos = async (snagId: string) => {
+    if (!pendingPhotos.length) return;
+    const bucket = supabase.storage.from('snag-photos');
+    for (const { file } of pendingPhotos) {
+      const ext = file.name.split('.').pop() || 'jpg';
+      const path = `${snagId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error: uploadError } = await bucket.upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type });
+      if (uploadError) {
+        // eslint-disable-next-line no-console
+        console.warn('Photo upload failed', uploadError.message);
+        continue;
+      }
+      const { data: urlData } = bucket.getPublicUrl(path);
+      await supabase.from('snag_photos').insert({ snag_id: snagId, photo_url: urlData.publicUrl });
+    }
+    setPendingPhotos([]);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canSave || !user) {
-      setError(!user ? 'You must be signed in to create a snag.' : null);
+    if (!user) {
+      setError('You must be signed in to manage snags.');
+      return;
+    }
+    if (!effectiveCoords) {
+      setError('Please place this snag on the floor plan before saving.');
       return;
     }
     setLoading(true);
     setError(null);
-    const payload = {
-      ...form,
-      project_id: projectId,
-      created_by: user.id,
-    } as Snag;
-    const { data, error: insertError } = await supabase.from('snags').insert(payload).select('*').single();
-    if (insertError) {
-      setError(insertError.message);
-      setLoading(false);
-      return;
+    try {
+      const assignedUuid = normalizeUuid(form.assigned_to);
+      let result: Snag | null = null;
+      if (isEditing && initialSnag) {
+        const updates = {
+          ...form,
+          assigned_to: assignedUuid,
+          plan_x: effectiveCoords.x,
+          plan_y: effectiveCoords.y,
+          plan_page: effectiveCoords.page,
+        };
+        const { data, error: updateError } = await supabase
+          .from('snags')
+          .update(updates)
+          .eq('id', initialSnag.id)
+          .select('*')
+          .single();
+        if (updateError) throw updateError;
+        result = data as Snag;
+        await uploadPhotos(initialSnag.id);
+        onUpdated?.(result);
+      } else {
+        const payload = {
+          ...form,
+          project_id: projectId,
+          created_by: user.id,
+          assigned_to: assignedUuid,
+          plan_x: effectiveCoords.x,
+          plan_y: effectiveCoords.y,
+          plan_page: effectiveCoords.page,
+        } as Snag;
+        const { data, error: insertError } = await supabase.from('snags').insert(payload).select('*').single();
+        if (insertError) throw insertError;
+        result = data as Snag;
+        if (checklistFields.length > 0) {
+          await supabase.from('snag_comments').insert({
+            snag_id: data.id,
+            author_id: data.created_by,
+            comment: `Custom fields: ${JSON.stringify(customValues)}`,
+          });
+        }
+        await uploadPhotos(result.id);
+        onCreated?.(result);
+        setForm({ title: '', description: '', priority: 'medium', status: 'open' });
+        setCustomValues({});
+      }
+      setPendingPhotos([]);
+      onCoordsClear?.();
+      if (isEditing) {
+        onCancel?.();
+      }
+    } catch (err: any) {
+      setError(err.message);
     }
-
-    if (checklistFields.length > 0) {
-      await supabase.from('snag_comments').insert({
-        snag_id: data.id,
-        author_id: data.created_by,
-        comment: `Custom fields: ${JSON.stringify(customValues)}`,
-      });
-    }
-
-    onCreated?.(data as unknown as Snag);
-    setForm({ title: '', description: '', priority: 'medium', status: 'open' });
-    setCustomValues({});
     setLoading(false);
   };
 
@@ -70,15 +179,31 @@ export const SnagForm: React.FC<Props> = ({ projectId, onCreated, checklistField
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs uppercase tracking-wide text-slate-500">On-site capture</p>
-          <h3 className="text-lg font-semibold text-slate-900">Create a new snag</h3>
+          <h3 className="text-lg font-semibold text-slate-900">{isEditing ? 'Edit snag' : 'Create a new snag'}</h3>
+          {effectiveCoords ? (
+            <p className="text-xs font-raleway text-bpas-grey">
+              Floor {effectiveCoords.page} · {(effectiveCoords.x * 100).toFixed(1)}%, {(effectiveCoords.y * 100).toFixed(1)}%
+            </p>
+          ) : (
+            <p className="text-xs font-raleway text-rose-600">Tap the floor plan to place this snag before saving.</p>
+          )}
         </div>
         <button
           type="submit"
           disabled={!canSave || loading}
           className="btn-primary disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {loading ? 'Saving...' : 'Save'}
+          {loading ? 'Saving...' : isEditing ? 'Update snag' : 'Save'}
         </button>
+        {isEditing && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="btn-secondary ml-2 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Cancel
+          </button>
+        )}
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="grid gap-3 sm:grid-cols-2">
@@ -212,6 +337,24 @@ export const SnagForm: React.FC<Props> = ({ projectId, onCreated, checklistField
           </div>
         </div>
       )}
+      <div className="space-y-2">
+        <span className="text-sm text-slate-600">Attach photos</span>
+        <input
+          type="file"
+          multiple
+          accept="image/*"
+          capture="environment"
+          onChange={(e) => handlePhotoSelect(e.target.files)}
+          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-brand focus:outline-none"
+        />
+        {pendingPhotos.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {pendingPhotos.map((photo, idx) => (
+              <img key={photo.preview + idx} src={photo.preview} className="h-20 w-20 rounded-lg object-cover" />
+            ))}
+          </div>
+        )}
+      </div>
     </form>
   );
 };

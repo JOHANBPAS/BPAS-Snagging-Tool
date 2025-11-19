@@ -54,6 +54,7 @@ create table if not exists public.snags (
   assigned_to uuid references public.profiles(id),
   plan_x double precision,
   plan_y double precision,
+  plan_page integer default 1,
   created_by uuid references public.profiles(id),
   created_at timestamptz default now()
 );

@@ -38,6 +38,7 @@ export interface Snag {
   assigned_to?: string | null;
   plan_x?: number | null;
   plan_y?: number | null;
+  plan_page?: number | null;
   created_by?: string;
   created_at?: string;
 }

@@ -41,6 +41,82 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
     return `${safeName}_Snag_Report_${stamp}.pdf`;
   };
 
+  const downscaleImage = async (dataUrl: string, maxSize = 1600, quality = 0.78): Promise<string> =>
+    new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let { width, height } = img;
+        const scale = Math.min(1, maxSize / Math.max(width, height));
+        width *= scale;
+        height *= scale;
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return resolve(dataUrl);
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    });
+
+  const getFloorPlans = async (): Promise<Array<{ page: number; image: string }>> => {
+    if (!project.plan_image_url) return [];
+    const url = project.plan_image_url;
+    if (url.toLowerCase().endsWith('.pdf')) {
+      const { GlobalWorkerOptions, getDocument } = await import('pdfjs-dist/legacy/build/pdf');
+      const workerSrc = new URL('pdfjs-dist/legacy/build/pdf.worker.min.mjs', import.meta.url).toString();
+      GlobalWorkerOptions.workerSrc = workerSrc;
+      const response = await fetch(url);
+      if (!response.ok) return [];
+      const buffer = await response.arrayBuffer();
+      const pdf = await getDocument({ data: buffer }).promise;
+      const pages: Array<{ page: number; image: string }> = [];
+      for (let pageIndex = 1; pageIndex <= pdf.numPages; pageIndex++) {
+        const page = await pdf.getPage(pageIndex);
+        const viewport = page.getViewport({ scale: 1.3 });
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        if (!context) continue;
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: context, viewport }).promise;
+        const image = canvas.toDataURL('image/jpeg', 0.85);
+        pages.push({ page: pageIndex, image });
+      }
+      return pages;
+    }
+    const data = await toDataUrl(url);
+    if (!data) return [];
+    return [{ page: 1, image: data }];
+  };
+
+  const fetchPhotoMap = async () => {
+    const ids = snags.map((snag) => snag.id);
+    if (!ids.length) return {};
+    const { data } = await supabase.from('snag_photos').select('*').in('snag_id', ids);
+    const map: Record<string, string[]> = {};
+    if (data) {
+      for (const row of data) {
+        const imgData = await toDataUrl(row.photo_url);
+        if (!map[row.snag_id]) map[row.snag_id] = [];
+        if (imgData) {
+          const scaled = await downscaleImage(imgData, 1400, 0.75);
+          map[row.snag_id].push(scaled);
+        }
+      }
+    }
+    return map;
+  };
+
+  const ensureImageDimensions = (dataUrl: string): Promise<{ width: number; height: number }> =>
+    new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve({ width: img.width, height: img.height });
+      img.src = dataUrl;
+    });
+
   const generateReport = async () => {
     setLoading(true);
     setError(null);
@@ -71,6 +147,36 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
     doc.text(`Client: ${project.client_name || 'N/A'}`, margin, contentStartY + 32);
     doc.text(`Generated: ${new Date().toLocaleString()}`, margin, contentStartY + 46);
 
+    const floorPlans = await getFloorPlans();
+    if (floorPlans.length) {
+      for (let idx = 0; idx < floorPlans.length; idx++) {
+        if (idx > 0) {
+          doc.addPage();
+          drawLetterhead(doc);
+        }
+        const plan = floorPlans[idx];
+        const scaledPlan = await downscaleImage(plan.image, 1600, 0.8);
+        const { width: imgW, height: imgH } = await ensureImageDimensions(scaledPlan);
+        const targetWidth = pageWidth - margin * 2;
+        const scaledHeight = targetWidth * (imgH / imgW);
+        doc.setFontSize(12);
+        doc.setTextColor(brandColors.grey);
+        doc.text(`Floor ${plan.page}`, margin, contentStartY + 40);
+        doc.addImage(scaledPlan, 'JPEG', margin, contentStartY + 52, targetWidth, scaledHeight);
+        const pinsForFloor = snags.filter((snag) => (snag.plan_page ?? 1) === plan.page);
+        pinsForFloor.forEach((snag) => {
+          if (snag.plan_x != null && snag.plan_y != null) {
+            const x = margin + targetWidth * snag.plan_x;
+            const y = contentStartY + 52 + scaledHeight * snag.plan_y;
+            doc.setFillColor(235, 64, 52);
+            doc.circle(x, y, 4, 'F');
+          }
+        });
+      }
+      doc.addPage();
+      drawLetterhead(doc);
+    }
+
     const statusColors: Record<string, [number, number, number]> = {
       open: [235, 160, 0],
       in_progress: [90, 96, 97],
@@ -79,7 +185,7 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
     };
 
     autoTable(doc, {
-      startY: contentStartY + 60,
+      startY: contentStartY,
       head: [['ID', 'Title', 'Location', 'Status', 'Priority', 'Due']],
       styles: { fontSize: 9, font: 'helvetica' },
       headStyles: { fillColor: [235, 160, 0], textColor: [18, 18, 18] },
@@ -100,11 +206,71 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
           }
         }
       },
-      margin: { top: contentStartY + 60, bottom: 60, left: margin, right: margin },
+      margin: { top: contentStartY, bottom: 60, left: margin, right: margin },
       didDrawPage: () => {
         drawLetterhead(doc);
       },
     });
+
+    const photosBySnag = await fetchPhotoMap();
+    if (snags.length) {
+      doc.addPage();
+      drawLetterhead(doc);
+      let y = contentStartY;
+      doc.setFontSize(16);
+      doc.setTextColor(brandColors.black);
+      doc.text('Snag photos', margin, y);
+      y += 24;
+
+      const ensureSpace = (heightNeeded: number) => {
+        if (y + heightNeeded > pageHeight - 60) {
+          doc.addPage();
+          drawLetterhead(doc);
+          y = contentStartY;
+        }
+      };
+
+      snags.forEach((snag) => {
+        const photos = photosBySnag[snag.id] || [];
+        ensureSpace(60);
+        doc.setFontSize(12);
+        doc.setTextColor(brandColors.black);
+        doc.text(`${snag.title} (${snag.id.slice(0, 6)})`, margin, y);
+        y += 14;
+        doc.setFontSize(10);
+        doc.setTextColor(brandColors.grey);
+        doc.text(
+          [
+            `Location: ${snag.location || '—'}`,
+            `Status: ${snag.status || 'open'}`,
+            `Priority: ${snag.priority || 'medium'}`,
+            `Due: ${snag.due_date || '—'}`,
+          ],
+          margin,
+          y,
+        );
+        y += 48;
+        doc.setTextColor(brandColors.black);
+        if (photos.length) {
+          const imgWidth = (pageWidth - margin * 2 - 16) / 2;
+          const imgHeight = imgWidth * 0.6;
+          photos.forEach((photo, index) => {
+            ensureSpace(imgHeight + 20);
+            const col = index % 2;
+            const x = margin + col * (imgWidth + 16);
+            doc.addImage(photo, 'JPEG', x, y, imgWidth, imgHeight);
+            if (col === 1 || index === photos.length - 1) {
+              y += imgHeight + 16;
+            }
+          });
+        } else {
+          ensureSpace(20);
+          doc.text('No photos attached.', margin, y);
+          y += 20;
+        }
+        y += 10;
+      });
+    }
 
     const pdf = doc.output('blob');
     const fileName = formatFileName();

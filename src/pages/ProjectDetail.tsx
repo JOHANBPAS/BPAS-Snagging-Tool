@@ -15,7 +15,10 @@ const ProjectDetail: React.FC = () => {
   const [project, setProject] = useState<Project | null>(null);
   const [snags, setSnags] = useState<Snag[]>([]);
   const [selected, setSelected] = useState<Snag | null>(null);
+  const [editingSnag, setEditingSnag] = useState<Snag | null>(null);
   const [checklistFields, setChecklistFields] = useState<ChecklistField[]>([]);
+  const [createCoords, setCreateCoords] = useState<{ x: number; y: number; page: number } | null>(null);
+  const [editCoords, setEditCoords] = useState<{ x: number; y: number; page: number } | null>(null);
 
   const fetchProject = async () => {
     if (!projectId) return;
@@ -60,6 +63,25 @@ const ProjectDetail: React.FC = () => {
     return { total, statusCounts, completedPct };
   }, [snags]);
 
+  const handleSnagDeleted = async (snag: Snag) => {
+    if (!window.confirm('Are you sure you want to delete this snag? This action cannot be undone.')) return;
+    const { data: photos } = await supabase.from('snag_photos').select('*').eq('snag_id', snag.id);
+    if (photos?.length) {
+      const bucket = supabase.storage.from('snag-photos');
+      const files = photos
+        .map((photo) => photo.photo_url.split('/storage/v1/object/public/snag-photos/')[1])
+        .filter(Boolean) as string[];
+      if (files.length) {
+        await bucket.remove(files);
+      }
+      await supabase.from('snag_photos').delete().eq('snag_id', snag.id);
+    }
+    await supabase.from('snag_comments').delete().eq('snag_id', snag.id);
+    await supabase.from('snags').delete().eq('id', snag.id);
+    if (selected?.id === snag.id) setSelected(null);
+    fetchSnags();
+  };
+
   if (!project) return <p className="p-4 text-slate-700">Loading project...</p>;
 
   return (
@@ -82,43 +104,73 @@ const ProjectDetail: React.FC = () => {
         </div>
       </div>
 
+      <PlanViewer
+        planUrl={project.plan_image_url}
+        snags={snags}
+        onPlanUploaded={async (url) => {
+          await supabase
+            .from('projects')
+            .update({ plan_image_url: url, created_by: project.created_by || user?.id })
+            .eq('id', project.id);
+          setProject((prev) => (prev ? { ...prev, plan_image_url: url } : prev));
+        }}
+        onSelectLocation={({ x, y, page }) => {
+          if (editingSnag) {
+            setEditCoords({ x, y, page });
+          } else {
+            setCreateCoords({ x, y, page });
+          }
+        }}
+      />
+      <p className="text-xs font-raleway text-bpas-grey">
+        Tap the plan to {editingSnag ? 'reposition the snag being edited' : 'start a new snag capture'}.
+      </p>
+
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-4">
-          <SnagForm projectId={project.id} onCreated={fetchSnags} checklistFields={checklistFields} />
-          <SnagList snags={snags} onSelect={setSelected} />
+          <SnagForm
+            projectId={project.id}
+            onCreated={fetchSnags}
+            checklistFields={checklistFields}
+            coords={createCoords}
+            onCoordsClear={() => setCreateCoords(null)}
+          />
+          <SnagList snags={snags} onSelect={setSelected} onEdit={setEditingSnag} onDelete={handleSnagDeleted} />
         </div>
         <div className="space-y-4">
-          <PlanViewer
-            projectId={project.id}
-            planUrl={project.plan_image_url}
-            snags={snags}
-            onPlanUploaded={async (url) => {
-              await supabase
-                .from('projects')
-                .update({ plan_image_url: url, created_by: project.created_by || user?.id })
-                .eq('id', project.id);
-              setProject((prev) => (prev ? { ...prev, plan_image_url: url } : prev));
-            }}
-            onCreateFromPlan={async ({ x, y }) => {
-              if (!user) return;
-              const newSnag: Partial<Snag> = {
-                project_id: project.id,
-                title: 'Pin drop snag',
-                status: 'open',
-                priority: 'medium',
-                plan_x: x,
-                plan_y: y,
-                created_by: user.id,
-              };
-              await supabase.from('snags').insert(newSnag);
-              fetchSnags();
-            }}
-          />
           <ReportPreview project={project} snags={snags} />
         </div>
       </div>
 
-      {selected && <SnagDetailModal snag={selected} onClose={() => setSelected(null)} />}
+      {selected && (
+        <SnagDetailModal
+          snag={selected}
+          onClose={() => setSelected(null)}
+          onDelete={handleSnagDeleted}
+          onEdit={(snagToEdit) => setEditingSnag(snagToEdit)}
+        />
+      )}
+      {editingSnag && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-8">
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl">
+            <SnagForm
+              projectId={project.id}
+              initialSnag={editingSnag}
+              coords={editCoords}
+              onCoordsClear={() => setEditCoords(null)}
+              onUpdated={() => {
+                fetchSnags();
+                setEditingSnag(null);
+                setEditCoords(null);
+              }}
+              onCancel={() => {
+                setEditingSnag(null);
+                setEditCoords(null);
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

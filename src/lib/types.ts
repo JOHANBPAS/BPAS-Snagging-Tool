@@ -61,6 +61,7 @@ export interface Database {
           assigned_to: string | null;
           plan_x: number | null;
           plan_y: number | null;
+          plan_page: number | null;
           created_by: string | null;
           created_at: string | null;
         };
@@ -77,6 +78,7 @@ export interface Database {
           assigned_to?: string | null;
           plan_x?: number | null;
           plan_y?: number | null;
+          plan_page?: number | null;
           created_by?: string | null;
           created_at?: string | null;
         };
