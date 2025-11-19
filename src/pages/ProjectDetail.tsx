@@ -128,13 +128,6 @@ const ProjectDetail: React.FC = () => {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-4">
-          <SnagForm
-            projectId={project.id}
-            onCreated={fetchSnags}
-            checklistFields={checklistFields}
-            coords={createCoords}
-            onCoordsClear={() => setCreateCoords(null)}
-          />
           <SnagList snags={snags} onSelect={setSelected} onEdit={setEditingSnag} onDelete={handleSnagDeleted} />
         </div>
         <div className="space-y-4">
@@ -150,14 +143,22 @@ const ProjectDetail: React.FC = () => {
           onEdit={(snagToEdit) => setEditingSnag(snagToEdit)}
         />
       )}
-      {editingSnag && (
+      {(editingSnag || createCoords) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-8">
-          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl">
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
             <SnagForm
               projectId={project.id}
-              initialSnag={editingSnag}
-              coords={editCoords}
-              onCoordsClear={() => setEditCoords(null)}
+              initialSnag={editingSnag || undefined}
+              coords={editingSnag ? editCoords : createCoords}
+              checklistFields={checklistFields}
+              onCoordsClear={() => {
+                setEditCoords(null);
+                setCreateCoords(null);
+              }}
+              onCreated={() => {
+                fetchSnags();
+                setCreateCoords(null);
+              }}
               onUpdated={() => {
                 fetchSnags();
                 setEditingSnag(null);
@@ -166,6 +167,7 @@ const ProjectDetail: React.FC = () => {
               onCancel={() => {
                 setEditingSnag(null);
                 setEditCoords(null);
+                setCreateCoords(null);
               }}
             />
           </div>

@@ -118,9 +118,16 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
       img.src = dataUrl;
     });
 
+  const [progress, setProgress] = useState<string>('');
+
+  const yieldToMain = () => new Promise((resolve) => setTimeout(resolve, 0));
+
   const generateReport = async () => {
     setLoading(true);
     setError(null);
+    setProgress('Initializing report...');
+    await yieldToMain();
+
     const doc = new jsPDF('p', 'pt', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
@@ -148,9 +155,15 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
     doc.text(`Client: ${project.client_name || 'N/A'}`, margin, contentStartY + 32);
     doc.text(`Generated: ${new Date().toLocaleString()}`, margin, contentStartY + 46);
 
+    setProgress('Processing floor plans...');
+    await yieldToMain();
+
     const floorPlans = await getFloorPlans();
     if (floorPlans.length) {
       for (let idx = 0; idx < floorPlans.length; idx++) {
+        setProgress(`Processing floor plan ${idx + 1} of ${floorPlans.length}...`);
+        await yieldToMain();
+
         if (idx > 0) {
           doc.addPage();
           drawLetterhead(doc);
@@ -177,6 +190,9 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
       doc.addPage();
       drawLetterhead(doc);
     }
+
+    setProgress('Generating snag list...');
+    await yieldToMain();
 
     const statusColors: Record<string, [number, number, number]> = {
       open: [235, 160, 0],
@@ -213,6 +229,9 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
       },
     });
 
+    setProgress('Processing photos...');
+    await yieldToMain();
+
     const photosBySnag = await fetchPhotoMap();
     if (snags.length) {
       doc.addPage();
@@ -231,7 +250,12 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
         }
       };
 
-      snags.forEach((snag) => {
+      for (let i = 0; i < snags.length; i++) {
+        if (i % 5 === 0) {
+          setProgress(`Adding photos for snag ${i + 1} of ${snags.length}...`);
+          await yieldToMain();
+        }
+        const snag = snags[i];
         const photos = photosBySnag[snag.id] || [];
         ensureSpace(60);
         doc.setFontSize(12);
@@ -270,8 +294,11 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
           y += 20;
         }
         y += 10;
-      });
+      }
     }
+
+    setProgress('Finalizing PDF...');
+    await yieldToMain();
 
     const pdf = doc.output('blob');
     const fileName = formatFileName();
@@ -302,6 +329,7 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
     }
     setPublicUrl(data.publicUrl);
     setLoading(false);
+    setProgress('');
   };
 
   return (
@@ -312,7 +340,7 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
           <h3 className="text-lg font-syne font-semibold text-bpas-black">Generate PDF</h3>
         </div>
         <button onClick={generateReport} disabled={loading} className="btn-primary disabled:opacity-60">
-          {loading ? 'Generating...' : 'Generate report'}
+          {loading ? (progress ? progress : 'Generating...') : 'Generate report'}
         </button>
       </div>
       {error && <p className="text-sm text-rose-600">{error}</p>}

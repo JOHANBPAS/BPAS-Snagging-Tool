@@ -195,7 +195,7 @@ export const SnagForm: React.FC<Props> = ({
         >
           {loading ? 'Saving...' : isEditing ? 'Update snag' : 'Save'}
         </button>
-        {isEditing && (
+        {onCancel && (
           <button
             type="button"
             onClick={onCancel}
