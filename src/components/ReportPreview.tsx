@@ -259,20 +259,59 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
     setProgress('Processing photos...');
     await yieldToMain();
 
+    const createLocationSnippet = async (
+      planImage: string,
+      x: number,
+      y: number,
+      snippetSize = 200,
+    ): Promise<string | null> => {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = snippetSize;
+          canvas.height = snippetSize;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return resolve(null);
+
+          // Calculate crop coordinates
+          // x and y are 0-1 percentages
+          const cropX = x * img.width - snippetSize / 2;
+          const cropY = y * img.height - snippetSize / 2;
+
+          // Draw the cropped area
+          ctx.drawImage(img, cropX, cropY, snippetSize, snippetSize, 0, 0, snippetSize, snippetSize);
+
+          // Draw a marker in the center
+          ctx.beginPath();
+          ctx.arc(snippetSize / 2, snippetSize / 2, 10, 0, 2 * Math.PI);
+          ctx.fillStyle = 'rgba(235, 64, 52, 0.8)';
+          ctx.fill();
+          ctx.strokeStyle = 'white';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          resolve(canvas.toDataURL('image/jpeg', 0.8));
+        };
+        img.onerror = () => resolve(null);
+        img.src = planImage;
+      });
+    };
+
     if (sortedSnags.length) {
       doc.addPage();
       drawLetterhead(doc);
-      let y = 100; // Start below header
+      let y = 120; // Increased top margin for header safety
       doc.setFontSize(16);
       doc.setTextColor(brandColors.black);
       doc.text('Snag photos', margin, y);
       y += 24;
 
       const ensureSpace = (heightNeeded: number) => {
-        if (y + heightNeeded > pageHeight - 80) { // Increased bottom margin check
+        if (y + heightNeeded > pageHeight - 100) { // Increased bottom margin for footer safety
           doc.addPage();
           drawLetterhead(doc);
-          y = 100;
+          y = 120;
         }
       };
 
@@ -296,7 +335,32 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
           }
         }
 
-        ensureSpace(60);
+        // Generate Location Snippet
+        let locationSnippet: string | null = null;
+        if (snag.plan_page && snag.plan_x != null && snag.plan_y != null) {
+          const plan = floorPlans.find(p => p.page === snag.plan_page);
+          if (plan) {
+            locationSnippet = await createLocationSnippet(plan.image, snag.plan_x, snag.plan_y);
+          }
+        }
+
+        // Calculate height needed
+        // Title + Details = ~60pt
+        // Photos/Snippet row height = ~imgHeight + 20pt
+        const imgWidth = (pageWidth - margin * 2 - 16) / 2;
+        const imgHeight = imgWidth * 0.6;
+
+        const hasPhotos = photos.length > 0;
+        const hasSnippet = !!locationSnippet;
+
+        // Calculate rows needed for photos + snippet
+        // We will put snippet as the first item if it exists
+        const totalImages = (hasSnippet ? 1 : 0) + photos.length;
+        const rows = Math.ceil(totalImages / 2);
+        const imagesHeight = rows * (imgHeight + 20);
+
+        ensureSpace(60 + (totalImages > 0 ? imagesHeight : 20));
+
         doc.setFontSize(12);
         doc.setTextColor(brandColors.black);
         doc.text(`${i + 1}. ${snag.title} (${snag.id.slice(0, 6)})`, margin, y);
@@ -315,20 +379,46 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
         );
         y += 48;
         doc.setTextColor(brandColors.black);
-        if (photos.length) {
-          const imgWidth = (pageWidth - margin * 2 - 16) / 2;
-          const imgHeight = imgWidth * 0.6;
-          photos.forEach((photo, index) => {
-            ensureSpace(imgHeight + 20);
-            const col = index % 2;
+
+        if (totalImages > 0) {
+          let currentImageIdx = 0;
+
+          // Draw Snippet first if exists
+          if (locationSnippet) {
+            doc.addImage(locationSnippet, 'JPEG', margin, y, imgWidth, imgHeight);
+            // Add label "Location"
+            doc.setFontSize(8);
+            doc.setTextColor(brandColors.grey);
+            doc.text('Location on plan', margin + 5, y + imgHeight - 5);
+            currentImageIdx++;
+          }
+
+          // Draw Photos
+          photos.forEach((photo) => {
+            const col = currentImageIdx % 2;
+            const row = Math.floor(currentImageIdx / 2);
+            // If we moved to a new row (and it's not the very first image which is at y), add height
+            // Actually we just calculate x/y based on index
+            // But wait, if we wrap pages inside this loop it gets complex.
+            // We already called ensureSpace for the whole block, so we assume it fits.
+
+            // However, if we have MANY photos, it might not fit.
+            // For now, let's assume max 4-6 photos per snag which fits on a page.
+            // If we need robust multi-page split for a single snag's photos, that's a bigger refactor.
+
             const x = margin + col * (imgWidth + 16);
-            doc.addImage(photo, 'JPEG', x, y, imgWidth, imgHeight);
-            if (col === 1 || index === photos.length - 1) {
-              y += imgHeight + 16;
-            }
+            // If snippet was first (idx 0), it's at y.
+            // If snippet was first, photo 1 is at idx 1 (col 1, row 0) -> same y.
+            // Photo 2 is at idx 2 (col 0, row 1) -> y + imgHeight + 16.
+
+            const rowY = y + Math.floor(currentImageIdx / 2) * (imgHeight + 16);
+
+            doc.addImage(photo, 'JPEG', x, rowY, imgWidth, imgHeight);
+            currentImageIdx++;
           });
+
+          y += rows * (imgHeight + 16);
         } else {
-          ensureSpace(20);
           doc.text('No photos attached.', margin, y);
           y += 20;
         }

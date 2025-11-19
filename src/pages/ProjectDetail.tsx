@@ -104,6 +104,14 @@ const ProjectDetail: React.FC = () => {
         </div>
       </div>
 
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-3 space-y-4">
+          <div className="flex justify-end">
+            <ReportPreview project={project} snags={snags} />
+          </div>
+        </div>
+      </div>
+
       <PlanViewer
         planUrl={project.plan_image_url}
         snags={snags}
@@ -126,13 +134,8 @@ const ProjectDetail: React.FC = () => {
         Tap the plan to {editingSnag ? 'reposition the snag being edited' : 'start a new snag capture'}.
       </p>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="lg:col-span-2 space-y-4">
-          <SnagList snags={snags} onSelect={setSelected} onEdit={setEditingSnag} onDelete={handleSnagDeleted} />
-        </div>
-        <div className="space-y-4">
-          <ReportPreview project={project} snags={snags} />
-        </div>
+      <div className="w-full space-y-4">
+        <SnagList snags={snags} onSelect={setSelected} onEdit={setEditingSnag} onDelete={handleSnagDeleted} />
       </div>
 
       {selected && (
