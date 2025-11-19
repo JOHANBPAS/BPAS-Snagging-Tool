@@ -49,12 +49,13 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl bg-gradient-to-r from-brand to-brand-dark px-6 py-8 text-white shadow-lg">
-        <p className="text-sm uppercase tracking-wide text-white/80">BPAS Snagging App</p>
-        <h1 className="text-3xl font-bold">Site health dashboard</h1>
-        <p className="max-w-2xl text-white/90">
+      <div className="rounded-2xl bg-gradient-to-r from-bpas-black to-bpas-grey px-6 py-8 text-white shadow-lg">
+        <p className="text-sm uppercase tracking-wide text-bpas-yellow font-syne">BPAS Snagging App</p>
+        <h1 className="text-3xl font-syne font-bold text-white">Site health dashboard</h1>
+        <p className="max-w-2xl font-raleway text-white/80">
           Track snags across every project, spot at-risk packages, and export reports for handover.
         </p>
+        <div className="mt-3 h-1 w-14 rounded-full bg-bpas-yellow" />
       </div>
 
       {stats && (
@@ -69,11 +70,11 @@ const Dashboard: React.FC = () => {
       )}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="rounded-xl border border-bpas-grey/20 bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs uppercase tracking-wide text-slate-500">Snags by status</p>
-              <h3 className="text-lg font-semibold text-slate-900">Workflow visibility</h3>
+              <p className="text-xs uppercase tracking-wide text-bpas-grey font-syne">Snags by status</p>
+              <h3 className="text-lg font-syne font-semibold text-bpas-black">Workflow visibility</h3>
             </div>
           </div>
           <div className="mt-4 h-64">
@@ -84,30 +85,30 @@ const Dashboard: React.FC = () => {
                 <XAxis dataKey="name" />
                 <YAxis allowDecimals={false} />
                 <Tooltip />
-                <Bar dataKey="value" fill="#0F766E" radius={[8, 8, 0, 0]} />
+                <Bar dataKey="value" fill="#eba000" radius={[8, 8, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="rounded-xl border border-bpas-grey/20 bg-white p-4 shadow-sm">
           <div>
-            <p className="text-xs uppercase tracking-wide text-slate-500">Projects</p>
-            <h3 className="text-lg font-semibold text-slate-900">Active sites</h3>
+            <p className="text-xs uppercase tracking-wide text-bpas-grey font-syne">Projects</p>
+            <h3 className="text-lg font-syne font-semibold text-bpas-black">Active sites</h3>
           </div>
-          <ul className="mt-4 space-y-2 text-sm text-slate-700">
+          <ul className="mt-4 space-y-2 text-sm font-raleway text-bpas-grey">
             {projects.map((project) => (
-              <li key={project.id} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+              <li key={project.id} className="rounded-lg border border-bpas-grey/20 bg-bpas-light px-3 py-2">
                 <div className="flex items-center justify-between">
-                  <span className="font-semibold text-slate-900">{project.name}</span>
-                  <span className="rounded-full bg-brand/10 px-2 py-1 text-xs font-semibold text-brand">
+                  <span className="font-syne font-semibold text-bpas-black">{project.name}</span>
+                  <span className="rounded-full bg-bpas-yellow/30 px-2 py-1 text-xs font-semibold text-bpas-black">
                     {project.status || 'active'}
                   </span>
                 </div>
-                <p className="text-xs text-slate-600">{project.address}</p>
+                <p className="text-xs text-bpas-grey">{project.address}</p>
               </li>
             ))}
-            {projects.length === 0 && <p className="text-sm text-slate-600">No projects yet.</p>}
+            {projects.length === 0 && <p className="text-sm text-bpas-grey">No projects yet.</p>}
           </ul>
         </div>
       </div>

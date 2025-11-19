@@ -31,6 +31,16 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
     }
   };
 
+  const formatFileName = () => {
+    const safeName = project.name.replace(/[^\w\s-]+/g, '').replace(/\s+/g, '_');
+    const ts = new Date();
+    const pad = (n: number) => `${n}`.padStart(2, '0');
+    const stamp = `${ts.getFullYear()}-${pad(ts.getMonth() + 1)}-${pad(ts.getDate())}_${pad(ts.getHours())}-${pad(
+      ts.getMinutes(),
+    )}-${pad(ts.getSeconds())}`;
+    return `${safeName}_Snag_Report_${stamp}.pdf`;
+  };
+
   const generateReport = async () => {
     setLoading(true);
     setError(null);
@@ -41,7 +51,6 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
 
     // Branding assets
     const letterheadData = await toDataUrl(brandAssets.letterhead);
-    const logoData = await toDataUrl(brandAssets.logoDark);
 
     const drawLetterhead = (targetDoc: jsPDF) => {
       if (letterheadData) {
@@ -51,11 +60,7 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
 
     drawLetterhead(doc);
 
-    // Header text on top of letterhead
-    if (logoData) {
-      doc.addImage(logoData, 'PNG', margin, 28, 90, 40);
-    }
-    const contentStartY = 140;
+    const contentStartY = 160;
     doc.setFontSize(18);
     doc.setTextColor(brandColors.black);
     doc.text('BPAS Snagging Report', margin, contentStartY);
@@ -102,7 +107,7 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
     });
 
     const pdf = doc.output('blob');
-    const fileName = `report-${project.id}-${Date.now()}.pdf`;
+    const fileName = formatFileName();
     const { error: uploadError } = await supabase.storage.from('reports').upload(fileName, pdf, {
       contentType: 'application/pdf',
       upsert: true,
@@ -113,6 +118,21 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
       return;
     }
     const { data } = supabase.storage.from('reports').getPublicUrl(fileName);
+    const { data: userData } = await supabase.auth.getUser();
+    if (project.id && data?.publicUrl) {
+      await supabase.from('project_reports').insert({
+        project_id: project.id,
+        file_name: fileName,
+        file_url: data.publicUrl,
+        generated_at: new Date().toISOString(),
+        generated_by: userData.user?.id || null,
+      });
+      window.dispatchEvent(
+        new CustomEvent('report:created', {
+          detail: { project_id: project.id, file_name: fileName, file_url: data.publicUrl },
+        }),
+      );
+    }
     setPublicUrl(data.publicUrl);
     setLoading(false);
   };
@@ -121,21 +141,29 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
     <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs uppercase tracking-wide text-slate-500">Automated reporting</p>
-          <h3 className="text-lg font-semibold text-slate-900">Generate PDF</h3>
+          <p className="text-xs uppercase tracking-wide text-bpas-grey font-syne">Automated reporting</p>
+          <h3 className="text-lg font-syne font-semibold text-bpas-black">Generate PDF</h3>
         </div>
-        <button
-          onClick={generateReport}
-          disabled={loading}
-          className="btn-primary disabled:opacity-60"
-        >
+        <button onClick={generateReport} disabled={loading} className="btn-primary disabled:opacity-60">
           {loading ? 'Generating...' : 'Generate report'}
         </button>
       </div>
       {error && <p className="text-sm text-rose-600">{error}</p>}
       {publicUrl && (
-        <div className="rounded-lg bg-brand/10 px-3 py-2 text-sm text-brand">
-          Report ready: <a className="underline" href={publicUrl} target="_blank" rel="noreferrer">Download / Share</a>
+        <div className="flex flex-col gap-2 rounded-xl bg-bpas-light px-3 py-3 text-sm text-bpas-black">
+          <p className="font-syne text-bpas-grey">Report ready</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <a className="btn-primary" href={publicUrl} target="_blank" rel="noreferrer">
+              Download / Share
+            </a>
+            <button
+              type="button"
+              className="btn-secondary px-3 py-2"
+              onClick={() => navigator.clipboard.writeText(publicUrl)}
+            >
+              Copy link
+            </button>
+          </div>
         </div>
       )}
     </div>

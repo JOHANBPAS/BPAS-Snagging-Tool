@@ -152,6 +152,25 @@ export interface Database {
         };
         Update: Partial<Database['public']['Tables']['checklist_template_fields']['Insert']>;
       };
+      project_reports: {
+        Row: {
+          id: string;
+          project_id: string;
+          file_name: string;
+          file_url: string;
+          generated_at: string | null;
+          generated_by: string | null;
+        };
+        Insert: {
+          id?: string;
+          project_id: string;
+          file_name: string;
+          file_url: string;
+          generated_at?: string | null;
+          generated_by?: string | null;
+        };
+        Update: Partial<Database['public']['Tables']['project_reports']['Insert']>;
+      };
     };
   };
 }

@@ -72,12 +72,12 @@ const ProjectDetail: React.FC = () => {
             <p className="text-sm text-slate-600">{project.address}</p>
             <p className="text-sm text-slate-600">Client: {project.client_name}</p>
           </div>
-          <div className="w-full max-w-xs rounded-lg bg-brand/10 p-3 text-sm text-brand">
-            <p className="font-semibold">Progress</p>
-            <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-white">
-              <div className="h-full bg-brand" style={{ width: `${summary.completedPct}%` }} />
+          <div className="w-full max-w-xs rounded-lg bg-bpas-light p-3 text-sm text-bpas-black">
+            <p className="font-syne font-semibold text-bpas-black">Progress</p>
+            <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-bpas-grey/20">
+              <div className="h-full bg-bpas-yellow" style={{ width: `${summary.completedPct}%` }} />
             </div>
-            <p className="text-xs text-brand">{summary.completedPct}% verified</p>
+            <p className="text-xs font-raleway text-bpas-grey">{summary.completedPct}% verified</p>
           </div>
         </div>
       </div>

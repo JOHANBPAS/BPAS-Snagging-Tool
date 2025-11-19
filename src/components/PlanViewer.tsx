@@ -19,6 +19,7 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, onPlanUploaded, snags, on
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const isPdf = planUrl?.toLowerCase().includes('.pdf');
+  const [renderedPlan, setRenderedPlan] = useState<string | null>(null);
 
   const markers = useMemo(
     () =>
@@ -57,6 +58,38 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, onPlanUploaded, snags, on
 
   const endPan = () => setIsPanning(false);
 
+  // Render first page of PDF to image for pin support
+  React.useEffect(() => {
+    const renderPdf = async () => {
+      if (!isPdf || !planUrl) {
+        setRenderedPlan(null);
+        return;
+      }
+      try {
+        const pdfjs = await import('pdfjs-dist');
+        if ((pdfjs as any).GlobalWorkerOptions) {
+          (pdfjs as any).GlobalWorkerOptions.workerSrc =
+            `https://cdn.jsdelivr.net/npm/pdfjs-dist@${(pdfjs as any).version}/build/pdf.worker.min.js`;
+        }
+        const loadingTask = (pdfjs as any).getDocument(planUrl);
+        const pdf = await loadingTask.promise;
+        const page = await pdf.getPage(1);
+        const viewport = page.getViewport({ scale: 1.5 });
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        if (!context) return;
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: context, viewport }).promise;
+        setRenderedPlan(canvas.toDataURL('image/png'));
+      } catch (err) {
+        console.warn('PDF render failed', err);
+        setRenderedPlan(null);
+      }
+    };
+    renderPdf();
+  }, [isPdf, planUrl]);
+
   return (
     <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-center justify-between">
@@ -86,19 +119,7 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, onPlanUploaded, snags, on
         </div>
       </div>
       {planUrl ? (
-        isPdf ? (
-          <div className="relative min-h-[360px] overflow-auto rounded-lg border border-slate-200 bg-slate-50">
-            <iframe
-              src={`${planUrl}#toolbar=0`}
-              title="Floor plan PDF"
-              className="h-full w-full min-h-[360px]"
-              allowFullScreen
-            />
-            <p className="absolute bottom-2 right-2 rounded bg-black/60 px-2 py-1 text-xs text-white">
-              PDF preview (pin placement disabled)
-            </p>
-          </div>
-        ) : (
+        (isPdf && renderedPlan) || !isPdf ? (
           <div className="relative min-h-[420px] overflow-auto rounded-lg border border-slate-200 bg-slate-100">
             <div
               ref={containerRef}
@@ -132,7 +153,7 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, onPlanUploaded, snags, on
                   transformOrigin: 'top left',
                 }}
               >
-                <img src={planUrl} className="h-full w-full object-contain" />
+                <img src={renderedPlan || planUrl} className="h-full w-full object-contain" />
                 {markers.map((marker) => (
                   <div
                     key={marker.id}
@@ -150,6 +171,18 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, onPlanUploaded, snags, on
                 )}
               </div>
             </div>
+          </div>
+        ) : (
+          <div className="relative min-h-[360px] overflow-auto rounded-lg border border-slate-200 bg-slate-50">
+            <iframe
+              src={`${planUrl}#toolbar=0`}
+              title="Floor plan PDF"
+              className="h-full w-full min-h-[360px]"
+              allowFullScreen
+            />
+            <p className="absolute bottom-2 right-2 rounded bg-black/60 px-2 py-1 text-xs text-white">
+              PDF preview (pin placement disabled)
+            </p>
           </div>
         )
       ) : (
