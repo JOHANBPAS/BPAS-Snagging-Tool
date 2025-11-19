@@ -93,24 +93,6 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
     return [{ page: 1, image: data }];
   };
 
-  const fetchPhotoMap = async () => {
-    const ids = snags.map((snag) => snag.id);
-    if (!ids.length) return {};
-    const { data } = await supabase.from('snag_photos').select('*').in('snag_id', ids);
-    const map: Record<string, string[]> = {};
-    if (data) {
-      for (const row of data) {
-        const imgData = await toDataUrl(row.photo_url);
-        if (!map[row.snag_id]) map[row.snag_id] = [];
-        if (imgData) {
-          const scaled = await downscaleImage(imgData, 1200, 0.7);
-          map[row.snag_id].push(scaled);
-        }
-      }
-    }
-    return map;
-  };
-
   const ensureImageDimensions = (dataUrl: string): Promise<{ width: number; height: number }> =>
     new Promise((resolve) => {
       const img = new Image();
@@ -158,6 +140,14 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
     setProgress('Processing floor plans...');
     await yieldToMain();
 
+    // Sort snags by floor page then creation date for consistent numbering
+    const sortedSnags = [...snags].sort((a, b) => {
+      const pageA = a.plan_page ?? 999; // Put unplaced snags last
+      const pageB = b.plan_page ?? 999;
+      if (pageA !== pageB) return pageA - pageB;
+      return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
+    });
+
     const floorPlans = await getFloorPlans();
     if (floorPlans.length) {
       for (let idx = 0; idx < floorPlans.length; idx++) {
@@ -196,7 +186,7 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
 
         doc.addImage(scaledPlan, 'JPEG', xOffset, yOffset, finalW, finalH);
 
-        const pinsForFloor = snags.filter((snag) => (snag.plan_page ?? 1) === plan.page);
+        const pinsForFloor = sortedSnags.filter((snag) => (snag.plan_page ?? 1) === plan.page);
         pinsForFloor.forEach((snag) => {
           if (snag.plan_x != null && snag.plan_y != null) {
             const x = xOffset + finalW * snag.plan_x;
@@ -207,7 +197,7 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
             doc.circle(x, y, 6, 'F'); // Slightly larger for visibility
 
             // Draw number
-            const snagIndex = snags.findIndex(s => s.id === snag.id);
+            const snagIndex = sortedSnags.findIndex(s => s.id === snag.id);
             if (snagIndex !== -1) {
               doc.setTextColor(255, 255, 255);
               doc.setFontSize(7);
@@ -240,11 +230,11 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
 
     autoTable(doc, {
       startY: listStartY,
-      head: [['ID', 'Title', 'Location', 'Status', 'Priority', 'Due']],
+      head: [['#', 'Title', 'Location', 'Status', 'Priority', 'Due']],
       styles: { fontSize: 9, font: 'helvetica' },
       headStyles: { fillColor: [235, 160, 0], textColor: [18, 18, 18] },
-      body: snags.map((snag) => [
-        snag.id.slice(0, 6),
+      body: sortedSnags.map((snag, idx) => [
+        idx + 1,
         snag.title,
         snag.location || '—',
         snag.status,
@@ -269,8 +259,7 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
     setProgress('Processing photos...');
     await yieldToMain();
 
-    const photosBySnag = await fetchPhotoMap();
-    if (snags.length) {
+    if (sortedSnags.length) {
       doc.addPage();
       drawLetterhead(doc);
       let y = 100; // Start below header
@@ -287,17 +276,30 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
         }
       };
 
-      for (let i = 0; i < snags.length; i++) {
-        if (i % 5 === 0) {
-          setProgress(`Adding photos for snag ${i + 1} of ${snags.length}...`);
-          await yieldToMain();
+      for (let i = 0; i < sortedSnags.length; i++) {
+        setProgress(`Adding photos for snag ${i + 1} of ${sortedSnags.length}...`);
+        await yieldToMain();
+
+        const snag = sortedSnags[i];
+
+        // JIT Photo Loading
+        const { data: photoRows } = await supabase.from('snag_photos').select('photo_url').eq('snag_id', snag.id);
+        const photos: string[] = [];
+
+        if (photoRows && photoRows.length > 0) {
+          for (const row of photoRows) {
+            const imgData = await toDataUrl(row.photo_url);
+            if (imgData) {
+              const scaled = await downscaleImage(imgData, 1200, 0.7);
+              photos.push(scaled);
+            }
+          }
         }
-        const snag = snags[i];
-        const photos = photosBySnag[snag.id] || [];
+
         ensureSpace(60);
         doc.setFontSize(12);
         doc.setTextColor(brandColors.black);
-        doc.text(`${snag.title} (${snag.id.slice(0, 6)})`, margin, y);
+        doc.text(`${i + 1}. ${snag.title} (${snag.id.slice(0, 6)})`, margin, y);
         y += 14;
         doc.setFontSize(10);
         doc.setTextColor(brandColors.grey);
