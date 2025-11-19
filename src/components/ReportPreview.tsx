@@ -1,7 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import React, { useState } from 'react';
-import { brandAssets, brandColors, brandContact } from '../lib/brand';
+import { brandAssets, brandColors } from '../lib/brand';
 import { supabase } from '../lib/supabaseClient';
 import { Project, Snag } from '../types';
 
@@ -34,51 +34,37 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
   const generateReport = async () => {
     setLoading(true);
     setError(null);
-    const doc = new jsPDF();
+    const doc = new jsPDF('p', 'pt', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
-    const margin = 14;
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 40;
 
     // Branding assets
     const letterheadData = await toDataUrl(brandAssets.letterhead);
     const logoData = await toDataUrl(brandAssets.logoDark);
-    const fingerprintData = await toDataUrl(brandAssets.fingerprint);
 
-    if (letterheadData) {
-      doc.addImage(letterheadData, 'PNG', 0, 0, pageWidth, 40);
-    }
+    const drawLetterhead = (targetDoc: jsPDF) => {
+      if (letterheadData) {
+        targetDoc.addImage(letterheadData, 'PNG', 0, 0, pageWidth, pageHeight);
+      }
+    };
 
+    drawLetterhead(doc);
+
+    // Header text on top of letterhead
     if (logoData) {
-      doc.addImage(logoData, 'PNG', margin, 10, 25, 12);
+      doc.addImage(logoData, 'PNG', margin, 28, 90, 40);
     }
-
-    // Header text
+    const contentStartY = 140;
     doc.setFontSize(18);
     doc.setTextColor(brandColors.black);
-    doc.text('BPAS Snagging Report', margin, 32);
-    doc.setDrawColor(brandColors.yellow);
-    doc.setFillColor(brandColors.yellow);
-    doc.rect(margin, 34, 28, 2, 'F');
+    doc.text('BPAS Snagging Report', margin, contentStartY);
 
     doc.setFontSize(11);
     doc.setTextColor(brandColors.grey);
-    const rightStart = pageWidth / 2 + 10;
-    doc.text(
-      [
-        `t: ${brandContact.phone}`,
-        `c: ${brandContact.call}`,
-        `e: ${brandContact.email}`,
-        `w: ${brandContact.web}`,
-        ...brandContact.address,
-      ],
-      rightStart,
-      16,
-    );
-
-    // Project meta
-    doc.setTextColor(brandColors.black);
-    doc.text(`Project: ${project.name}`, margin, 48);
-    doc.text(`Client: ${project.client_name || 'N/A'}`, margin, 54);
-    doc.text(`Generated: ${new Date().toLocaleString()}`, margin, 60);
+    doc.text(`Project: ${project.name}`, margin, contentStartY + 18);
+    doc.text(`Client: ${project.client_name || 'N/A'}`, margin, contentStartY + 32);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, margin, contentStartY + 46);
 
     const statusColors: Record<string, [number, number, number]> = {
       open: [235, 160, 0],
@@ -88,7 +74,7 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
     };
 
     autoTable(doc, {
-      startY: 68,
+      startY: contentStartY + 60,
       head: [['ID', 'Title', 'Location', 'Status', 'Priority', 'Due']],
       styles: { fontSize: 9, font: 'helvetica' },
       headStyles: { fillColor: [235, 160, 0], textColor: [18, 18, 18] },
@@ -109,18 +95,11 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
           }
         }
       },
+      margin: { top: contentStartY + 60, bottom: 60, left: margin, right: margin },
+      didDrawPage: () => {
+        drawLetterhead(doc);
+      },
     });
-
-    // Footer / watermark
-    if (fingerprintData) {
-      (doc as any).setGState?.(doc.GState({ opacity: 0.08 })) ||
-        (doc as any).setTextColor?.(18, 18, 18, 0.08);
-      doc.addImage(fingerprintData, 'PNG', pageWidth / 2 - 30, doc.internal.pageSize.getHeight() - 70, 60, 60);
-      (doc as any).setGState?.(doc.GState({ opacity: 1 }));
-      doc.setTextColor(brandColors.black);
-    }
-    doc.setFontSize(9);
-    doc.text(brandContact.strapline, margin, doc.internal.pageSize.getHeight() - 10);
 
     const pdf = doc.output('blob');
     const fileName = `report-${project.id}-${Date.now()}.pdf`;

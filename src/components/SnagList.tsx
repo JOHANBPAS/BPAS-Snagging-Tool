@@ -23,38 +23,46 @@ const priorityChip: Record<SnagPriority, string> = {
 export const SnagList: React.FC<Props> = ({ snags, onSelect }) => {
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <div className="grid grid-cols-12 gap-2 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-        <span className="col-span-2">ID</span>
-        <span className="col-span-3">Description</span>
-        <span>Location</span>
-        <span>Status</span>
-        <span>Priority</span>
-        <span>Assignee</span>
-        <span>Due</span>
-        <span>Created</span>
-      </div>
-      <div className="divide-y divide-slate-100">
-        {snags.map((snag) => (
-          <button
-            key={snag.id}
-            onClick={() => onSelect(snag)}
-            className="grid w-full grid-cols-12 gap-2 px-3 py-3 text-left text-sm hover:bg-brand/5"
-          >
-            <span className="col-span-2 text-xs font-mono text-slate-500">{snag.id.slice(0, 8)}</span>
-            <span className="col-span-3 font-semibold text-slate-900">{snag.title}</span>
-            <span className="text-slate-600">{snag.location || '—'}</span>
-            <span className={`w-fit rounded-full px-2 py-1 text-xs font-semibold ${statusStyles[snag.status || 'open']}`}>
-              {snag.status?.replace('_', ' ') || 'open'}
-            </span>
-            <span className={`w-fit rounded-full px-2 py-1 text-xs font-semibold ${priorityChip[snag.priority || 'medium']}`}>
-              {snag.priority}
-            </span>
-            <span className="text-slate-600">{snag.assigned_to || 'Unassigned'}</span>
-            <span className="text-slate-600">{snag.due_date || '—'}</span>
-            <span className="text-slate-600">{snag.created_at?.slice(0, 10) || '—'}</span>
-          </button>
-        ))}
-        {snags.length === 0 && <p className="p-4 text-sm text-slate-600">No snags yet.</p>}
+      <div className="overflow-x-auto">
+        <div className="min-w-full">
+          <div className="grid grid-cols-12 gap-2 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <span className="col-span-2">ID</span>
+            <span className="col-span-3">Description</span>
+            <span>Location</span>
+            <span className="text-center">Status</span>
+            <span className="text-center">Priority</span>
+            <span>Assignee</span>
+            <span>Due</span>
+            <span>Created</span>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {snags.map((snag) => (
+              <button
+                key={snag.id}
+                onClick={() => onSelect(snag)}
+                className="grid w-full grid-cols-12 gap-2 px-3 py-3 text-left text-sm hover:bg-bpas-yellow/10"
+              >
+                <span className="col-span-2 truncate text-xs font-mono text-slate-500">{snag.id}</span>
+                <span className="col-span-3 font-semibold text-slate-900 break-words">{snag.title}</span>
+                <span className="truncate text-slate-600">{snag.location || '—'}</span>
+                <span
+                  className={`col-span-1 flex items-center justify-center rounded-full px-2 py-1 text-xs font-semibold ${statusStyles[snag.status || 'open']}`}
+                >
+                  <span className="truncate">{snag.status?.replace('_', ' ') || 'open'}</span>
+                </span>
+                <span
+                  className={`col-span-1 flex items-center justify-center rounded-full px-2 py-1 text-xs font-semibold ${priorityChip[snag.priority || 'medium']}`}
+                >
+                  <span className="truncate">{snag.priority}</span>
+                </span>
+                <span className="truncate text-slate-600">{snag.assigned_to || 'Unassigned'}</span>
+                <span className="text-slate-600">{snag.due_date || '—'}</span>
+                <span className="text-slate-600">{snag.created_at?.slice(0, 10) || '—'}</span>
+              </button>
+            ))}
+            {snags.length === 0 && <p className="p-4 text-sm text-slate-600">No snags yet.</p>}
+          </div>
+        </div>
       </div>
     </div>
   );
