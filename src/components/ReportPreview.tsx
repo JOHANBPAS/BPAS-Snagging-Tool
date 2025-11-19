@@ -103,7 +103,7 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
         const imgData = await toDataUrl(row.photo_url);
         if (!map[row.snag_id]) map[row.snag_id] = [];
         if (imgData) {
-          const scaled = await downscaleImage(imgData, 1400, 0.75);
+          const scaled = await downscaleImage(imgData, 1200, 0.7);
           map[row.snag_id].push(scaled);
         }
       }
@@ -156,7 +156,7 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
           drawLetterhead(doc);
         }
         const plan = floorPlans[idx];
-        const scaledPlan = await downscaleImage(plan.image, 1600, 0.8);
+        const scaledPlan = await downscaleImage(plan.image, 1200, 0.7);
         const { width: imgW, height: imgH } = await ensureImageDimensions(scaledPlan);
         const targetWidth = pageWidth - margin * 2;
         const scaledHeight = targetWidth * (imgH / imgW);

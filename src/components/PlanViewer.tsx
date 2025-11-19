@@ -242,14 +242,14 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, onPlanUploaded, snags, on
                   <img src={imagePlan!} className="h-full w-full object-contain" />
                 )}
 
-                {markers.map((marker) => (
+                {markers.map((marker, idx) => (
                   <div
                     key={marker.id}
-                    className="absolute flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-rose-500 text-xs font-bold text-white"
+                    className="absolute flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-rose-500 text-xs font-bold text-white shadow-sm border border-white"
                     style={{ left: `${marker.x * 100}%`, top: `${marker.y * 100}%` }}
                     title={marker.title}
                   >
-                    !
+                    {idx + 1}
                   </div>
                 ))}
                 {hovered && (

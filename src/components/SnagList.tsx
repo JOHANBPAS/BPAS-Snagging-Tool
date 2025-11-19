@@ -50,12 +50,16 @@ export const SnagList: React.FC<Props> = ({ snags, onSelect, onEdit, onDelete })
                 }}
                 className="grid w-full grid-cols-12 gap-2 px-3 py-3 text-left text-sm hover:bg-bpas-yellow/10 focus-within:bg-bpas-yellow/10"
               >
-                <span className="col-span-2 truncate text-xs font-mono text-slate-500">{snag.id}</span>
+                <span className="col-span-2 truncate text-xs font-mono text-slate-500">
+                  <span className="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-xs font-bold text-white">
+                    {snags.indexOf(snag) + 1}
+                  </span>
+                  {snag.id.slice(0, 6)}
+                </span>
                 <span className="col-span-3 font-semibold text-slate-900 break-words">{snag.title}</span>
                 <span
-                  className={`truncate ${
-                    snag.plan_x == null || snag.plan_y == null ? 'text-rose-600 font-semibold' : 'text-slate-600'
-                  }`}
+                  className={`truncate ${snag.plan_x == null || snag.plan_y == null ? 'text-rose-600 font-semibold' : 'text-slate-600'
+                    }`}
                 >
                   {snag.plan_x == null || snag.plan_y == null ? 'No pin placed' : snag.location || '—'}
                 </span>
