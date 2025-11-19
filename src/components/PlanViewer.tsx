@@ -219,7 +219,46 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, onPlanUploaded, snags, on
               }}
               onMouseUp={endPan}
               onMouseOut={endPan}
-              className="relative h-full w-full cursor-crosshair"
+              onTouchStart={(e) => {
+                if (e.touches.length === 2) {
+                  // Pinch start
+                  const dist = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                  );
+                  // Store initial distance for zoom calculation
+                  (e.target as any).dataset.startDist = dist;
+                  (e.target as any).dataset.startScale = scale;
+                } else if (e.touches.length === 1 && scale > 1) {
+                  // Pan start
+                  setIsPanning(true);
+                  setPanStart({ x: e.touches[0].clientX - pan.x, y: e.touches[0].clientY - pan.y });
+                }
+              }}
+              onTouchMove={(e) => {
+                if (e.touches.length === 2) {
+                  // Pinch zoom
+                  e.preventDefault();
+                  const dist = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                  );
+                  const startDist = parseFloat((e.target as any).dataset.startDist);
+                  const startScale = parseFloat((e.target as any).dataset.startScale);
+                  if (startDist && startScale) {
+                    const newScale = startScale * (dist / startDist);
+                    setScale(clampScale(newScale));
+                  }
+                } else if (e.touches.length === 1 && isPanning) {
+                  // Pan
+                  e.preventDefault();
+                  setPan({ x: e.touches[0].clientX - panStart.x, y: e.touches[0].clientY - panStart.y });
+                }
+              }}
+              onTouchEnd={() => {
+                setIsPanning(false);
+              }}
+              className="relative h-full w-full cursor-crosshair touch-none"
             >
               <div
                 ref={contentRef}

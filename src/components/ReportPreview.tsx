@@ -302,34 +302,49 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
 
     const pdf = doc.output('blob');
     const fileName = formatFileName();
-    const { error: uploadError } = await supabase.storage.from('reports').upload(fileName, pdf, {
-      contentType: 'application/pdf',
-      upsert: true,
-    });
-    if (uploadError) {
-      setError(uploadError.message);
-      setLoading(false);
-      return;
-    }
-    const { data } = supabase.storage.from('reports').getPublicUrl(fileName);
-    const { data: userData } = await supabase.auth.getUser();
-    if (project.id && data?.publicUrl) {
-      await supabase.from('project_reports').insert({
-        project_id: project.id,
-        file_name: fileName,
-        file_url: data.publicUrl,
-        generated_at: new Date().toISOString(),
-        generated_by: userData.user?.id || null,
+
+    try {
+      const { error: uploadError } = await supabase.storage.from('reports').upload(fileName, pdf, {
+        contentType: 'application/pdf',
+        upsert: true,
       });
-      window.dispatchEvent(
-        new CustomEvent('report:created', {
-          detail: { project_id: project.id, file_name: fileName, file_url: data.publicUrl },
-        }),
-      );
+
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage.from('reports').getPublicUrl(fileName);
+      const { data: userData } = await supabase.auth.getUser();
+
+      if (project.id && data?.publicUrl) {
+        await supabase.from('project_reports').insert({
+          project_id: project.id,
+          file_name: fileName,
+          file_url: data.publicUrl,
+          generated_at: new Date().toISOString(),
+          generated_by: userData.user?.id || null,
+        });
+        window.dispatchEvent(
+          new CustomEvent('report:created', {
+            detail: { project_id: project.id, file_name: fileName, file_url: data.publicUrl },
+          }),
+        );
+      }
+      setPublicUrl(data.publicUrl);
+    } catch (err: any) {
+      console.warn('Upload failed, falling back to direct download:', err);
+      // Fallback to direct download
+      const url = URL.createObjectURL(pdf);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setError('Upload failed (likely too large), but report was downloaded to your device.');
+    } finally {
+      setLoading(false);
+      setProgress('');
     }
-    setPublicUrl(data.publicUrl);
-    setLoading(false);
-    setProgress('');
   };
 
   return (
