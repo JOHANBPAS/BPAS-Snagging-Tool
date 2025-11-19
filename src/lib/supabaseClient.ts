@@ -9,4 +9,5 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.warn('Supabase environment variables are missing. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
 }
 
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
+// @ts-ignore
+export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey) as any;

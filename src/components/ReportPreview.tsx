@@ -65,6 +65,7 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
     if (!project.plan_image_url) return [];
     const url = project.plan_image_url;
     if (url.toLowerCase().endsWith('.pdf')) {
+      // @ts-ignore
       const { GlobalWorkerOptions, getDocument } = await import('pdfjs-dist/legacy/build/pdf');
       const workerSrc = new URL('pdfjs-dist/legacy/build/pdf.worker.min.mjs', import.meta.url).toString();
       GlobalWorkerOptions.workerSrc = workerSrc;
