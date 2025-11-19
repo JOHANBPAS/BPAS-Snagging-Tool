@@ -164,30 +164,60 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
         setProgress(`Processing floor plan ${idx + 1} of ${floorPlans.length}...`);
         await yieldToMain();
 
-        if (idx > 0) {
-          doc.addPage();
-          drawLetterhead(doc);
-        }
+        // Always add a new page for floor plans, using landscape orientation
+        doc.addPage('a4', 'l');
+        // We might skip letterhead for landscape or adjust it. 
+        // For now, let's skip drawing the portrait letterhead on landscape pages to avoid weird stretching/cropping
+        // unless we have a landscape version. 
+        // If the user wants branding, we can add a small logo manually.
+
         const plan = floorPlans[idx];
-        const scaledPlan = await downscaleImage(plan.image, 1200, 0.7);
+        // Landscape A4 is 841.89 x 595.28 pt (approx)
+        const landscapeWidth = doc.internal.pageSize.getWidth();
+        const landscapeHeight = doc.internal.pageSize.getHeight();
+
+        const scaledPlan = await downscaleImage(plan.image, 1600, 0.8); // Slightly higher quality for full page
         const { width: imgW, height: imgH } = await ensureImageDimensions(scaledPlan);
-        const targetWidth = pageWidth - margin * 2;
-        const scaledHeight = targetWidth * (imgH / imgW);
-        doc.setFontSize(12);
-        doc.setTextColor(brandColors.grey);
-        doc.text(`Floor ${plan.page}`, margin, contentStartY + 40);
-        doc.addImage(scaledPlan, 'JPEG', margin, contentStartY + 52, targetWidth, scaledHeight);
+
+        const targetWidth = landscapeWidth - margin * 2;
+        const targetHeight = landscapeHeight - margin * 2 - 40; // Leave space for title
+
+        // Fit image within bounds while maintaining aspect ratio
+        const scaleFactor = Math.min(targetWidth / imgW, targetHeight / imgH);
+        const finalW = imgW * scaleFactor;
+        const finalH = imgH * scaleFactor;
+
+        const xOffset = (landscapeWidth - finalW) / 2;
+        const yOffset = margin + 30;
+
+        doc.setFontSize(14);
+        doc.setTextColor(brandColors.black);
+        doc.text(`Floor ${plan.page}`, margin, margin + 15);
+
+        doc.addImage(scaledPlan, 'JPEG', xOffset, yOffset, finalW, finalH);
+
         const pinsForFloor = snags.filter((snag) => (snag.plan_page ?? 1) === plan.page);
         pinsForFloor.forEach((snag) => {
           if (snag.plan_x != null && snag.plan_y != null) {
-            const x = margin + targetWidth * snag.plan_x;
-            const y = contentStartY + 52 + scaledHeight * snag.plan_y;
+            const x = xOffset + finalW * snag.plan_x;
+            const y = yOffset + finalH * snag.plan_y;
+
+            // Draw marker
             doc.setFillColor(235, 64, 52);
-            doc.circle(x, y, 4, 'F');
+            doc.circle(x, y, 6, 'F'); // Slightly larger for visibility
+
+            // Draw number
+            const snagIndex = snags.findIndex(s => s.id === snag.id);
+            if (snagIndex !== -1) {
+              doc.setTextColor(255, 255, 255);
+              doc.setFontSize(7);
+              doc.text(String(snagIndex + 1), x, y, { align: 'center', baseline: 'middle' });
+            }
           }
         });
       }
-      doc.addPage();
+      // Switch back to portrait for the rest of the report if needed, or keep adding portrait pages
+      doc.addPage('a4', 'p');
       drawLetterhead(doc);
     }
 
@@ -201,8 +231,15 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
       verified: [37, 99, 235],
     };
 
+    // Reset Y for the new portrait page
+    let listStartY = margin + 100; // Start lower to accommodate letterhead header
+
+    doc.setFontSize(16);
+    doc.setTextColor(brandColors.black);
+    doc.text('Snag List', margin, listStartY - 20);
+
     autoTable(doc, {
-      startY: contentStartY,
+      startY: listStartY,
       head: [['ID', 'Title', 'Location', 'Status', 'Priority', 'Due']],
       styles: { fontSize: 9, font: 'helvetica' },
       headStyles: { fillColor: [235, 160, 0], textColor: [18, 18, 18] },
@@ -223,7 +260,7 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
           }
         }
       },
-      margin: { top: contentStartY, bottom: 60, left: margin, right: margin },
+      margin: { top: 100, bottom: 80, left: margin, right: margin }, // Increased bottom margin
       didDrawPage: () => {
         drawLetterhead(doc);
       },
@@ -236,17 +273,17 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
     if (snags.length) {
       doc.addPage();
       drawLetterhead(doc);
-      let y = contentStartY;
+      let y = 100; // Start below header
       doc.setFontSize(16);
       doc.setTextColor(brandColors.black);
       doc.text('Snag photos', margin, y);
       y += 24;
 
       const ensureSpace = (heightNeeded: number) => {
-        if (y + heightNeeded > pageHeight - 60) {
+        if (y + heightNeeded > pageHeight - 80) { // Increased bottom margin check
           doc.addPage();
           drawLetterhead(doc);
-          y = contentStartY;
+          y = 100;
         }
       };
 

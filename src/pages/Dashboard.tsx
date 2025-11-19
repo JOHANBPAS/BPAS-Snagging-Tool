@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { StatsCards } from '../components/StatsCards';
 import { supabase } from '../lib/supabaseClient';
 import { DashboardStats, Project, Snag } from '../types';
 
 const Dashboard: React.FC = () => {
+  const navigate = useNavigate();
   const [projects, setProjects] = useState<Project[]>([]);
   const [snags, setSnags] = useState<Snag[]>([]);
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -98,7 +100,11 @@ const Dashboard: React.FC = () => {
           </div>
           <ul className="mt-4 space-y-2 text-sm font-raleway text-bpas-grey">
             {projects.map((project) => (
-              <li key={project.id} className="rounded-lg border border-bpas-grey/20 bg-bpas-light px-3 py-2">
+              <li
+                key={project.id}
+                className="rounded-lg border border-bpas-grey/20 bg-bpas-light px-3 py-2 cursor-pointer hover:bg-bpas-yellow/10 transition-colors"
+                onClick={() => navigate(`/projects/${project.id}`)}
+              >
                 <div className="flex items-center justify-between">
                   <span className="font-syne font-semibold text-bpas-black">{project.name}</span>
                   <span className="rounded-full bg-bpas-yellow/30 px-2 py-1 text-xs font-semibold text-bpas-black">
