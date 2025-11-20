@@ -115,9 +115,23 @@ export const SnagDetailModal: React.FC<Props> = ({ snag, onClose, onEdit, onDele
             <FileUpload
               label="Add photo"
               bucket="snag-photos"
-              onUploaded={async (path) => {
-                await supabase.from('snag_photos').insert({ snag_id: snag.id, photo_url: path });
-                setPhotos((prev) => [...prev, { id: path, snag_id: snag.id, photo_url: path }]);
+              onUploaded={async (pathOrPaths) => {
+                const paths = Array.isArray(pathOrPaths) ? pathOrPaths : [pathOrPaths];
+                const newPhotos = paths.map(path => ({
+                  snag_id: snag.id,
+                  photo_url: path
+                }));
+
+                await supabase.from('snag_photos').insert(newPhotos);
+
+                setPhotos((prev) => [
+                  ...prev,
+                  ...newPhotos.map(p => ({
+                    id: p.photo_url, // Temporary ID for UI
+                    snag_id: p.snag_id,
+                    photo_url: p.photo_url
+                  }))
+                ]);
               }}
             />
           </div>
