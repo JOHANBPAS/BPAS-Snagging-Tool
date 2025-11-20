@@ -5,6 +5,8 @@ import { Database } from '../types/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { normalizeUuid } from '../lib/format';
 import { resizeImage } from '../lib/imageUtils';
+import { useOfflineStatus } from '../hooks/useOfflineStatus';
+import { queueMutation } from '../services/offlineStorage';
 
 interface Props {
   projectId: string;
@@ -119,6 +121,8 @@ export const SnagForm: React.FC<Props> = ({
     setPendingPhotos([]);
   };
 
+  const isOffline = useOfflineStatus();
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) {
@@ -134,26 +138,12 @@ export const SnagForm: React.FC<Props> = ({
     try {
       const assignedUuid = normalizeUuid(form.assigned_to);
       let result: Snag | null = null;
-      if (isEditing && initialSnag) {
-        const updates = {
-          ...form,
-          assigned_to: assignedUuid,
-          plan_x: effectiveCoords.x,
-          plan_y: effectiveCoords.y,
-          plan_page: effectiveCoords.page,
-          plan_id: effectiveCoords.planId,
-        };
-        const { data, error: updateError } = await supabase
-          .from('snags')
-          .update(updates as Database['public']['Tables']['snags']['Update'])
-          .eq('id', initialSnag.id)
-          .select('*')
-          .single();
-        if (updateError) throw updateError;
-        result = data as Snag;
-        await uploadPhotos(initialSnag.id);
-        onUpdated?.(result);
-      } else {
+
+      if (isOffline) {
+        // Offline handling
+        const offlineId = `offline-${Date.now()}`;
+        const timestamp = new Date().toISOString();
+
         const payload = {
           ...form,
           project_id: projectId,
@@ -163,25 +153,81 @@ export const SnagForm: React.FC<Props> = ({
           plan_y: effectiveCoords.y,
           plan_page: effectiveCoords.page,
           plan_id: effectiveCoords.planId,
-        } as Database['public']['Tables']['snags']['Insert'];
+          // Add temporary fields for optimistic UI if needed, or just raw payload
+        };
 
-        const { data, error: insertError } = await supabase.from('snags').insert(payload).select('*').single();
-        if (insertError) throw insertError;
-        if (!data) throw new Error('Failed to create snag');
-
-        result = data as Snag;
-        if (checklistFields.length > 0) {
-          await supabase.from('snag_comments').insert({
-            snag_id: data.id,
-            author_id: data.created_by,
-            comment: `Custom fields: ${JSON.stringify(customValues)}`,
-          } as Database['public']['Tables']['snag_comments']['Insert']);
+        if (isEditing && initialSnag) {
+          await queueMutation('snags', 'UPDATE', { ...payload, id: initialSnag.id });
+          // Optimistic result for UI
+          result = { ...initialSnag, ...payload } as Snag;
+          onUpdated?.(result);
+        } else {
+          // For new snags, we can't easily generate a real UUID offline that matches Supabase's default.
+          // We'll queue it and the UI will just have to wait or show a placeholder.
+          // For now, we'll just queue it and close the form.
+          await queueMutation('snags', 'INSERT', payload);
+          onCreated?.({ ...payload, id: offlineId, created_at: timestamp, status: 'open' } as Snag);
         }
-        await uploadPhotos(result.id);
-        onCreated?.(result);
-        setForm({ title: '', description: '', priority: 'medium', status: 'open' });
-        setCustomValues({});
+
+        // Offline photos handling is complex. For now, we might skip photos or warn user.
+        if (pendingPhotos.length > 0) {
+          // Ideally we'd cache these photos in IDB too.
+          // For this iteration, we'll warn that photos will be uploaded later or skipped.
+          console.warn('Offline photo upload not fully supported yet.');
+        }
+
+      } else {
+        // Online handling (existing logic)
+        if (isEditing && initialSnag) {
+          const updates = {
+            ...form,
+            assigned_to: assignedUuid,
+            plan_x: effectiveCoords.x,
+            plan_y: effectiveCoords.y,
+            plan_page: effectiveCoords.page,
+            plan_id: effectiveCoords.planId,
+          };
+          const { data, error: updateError } = await supabase
+            .from('snags')
+            .update(updates as Database['public']['Tables']['snags']['Update'])
+            .eq('id', initialSnag.id)
+            .select('*')
+            .single();
+          if (updateError) throw updateError;
+          result = data as Snag;
+          await uploadPhotos(initialSnag.id);
+          onUpdated?.(result);
+        } else {
+          const payload = {
+            ...form,
+            project_id: projectId,
+            created_by: user.id,
+            assigned_to: assignedUuid,
+            plan_x: effectiveCoords.x,
+            plan_y: effectiveCoords.y,
+            plan_page: effectiveCoords.page,
+            plan_id: effectiveCoords.planId,
+          } as Database['public']['Tables']['snags']['Insert'];
+
+          const { data, error: insertError } = await supabase.from('snags').insert(payload).select('*').single();
+          if (insertError) throw insertError;
+          if (!data) throw new Error('Failed to create snag');
+
+          result = data as Snag;
+          if (checklistFields.length > 0) {
+            await supabase.from('snag_comments').insert({
+              snag_id: data.id,
+              author_id: data.created_by,
+              comment: `Custom fields: ${JSON.stringify(customValues)}`,
+            } as Database['public']['Tables']['snag_comments']['Insert']);
+          }
+          await uploadPhotos(result.id);
+          onCreated?.(result);
+          setForm({ title: '', description: '', priority: 'medium', status: 'open' });
+          setCustomValues({});
+        }
       }
+
       setPendingPhotos([]);
       onCoordsClear?.();
       if (isEditing) {

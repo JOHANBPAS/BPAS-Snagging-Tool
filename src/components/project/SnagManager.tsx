@@ -5,6 +5,8 @@ import { SnagForm } from '../SnagForm';
 import { supabase } from '../../lib/supabaseClient';
 import { ChecklistField, Project, Snag } from '../../types';
 import { Database } from '../../types/supabase';
+import { useOfflineStatus } from '../../hooks/useOfflineStatus';
+import { queueMutation } from '../../services/offlineStorage';
 
 interface Props {
     project: Project;
@@ -52,29 +54,35 @@ export const SnagManager: React.FC<Props> = ({
         setDeleteId(snag.id);
     };
 
+    const isOffline = useOfflineStatus();
+
     const executeDelete = async () => {
         if (!deleteId) return;
         const snag = snags.find((s) => s.id === deleteId);
         if (!snag) return;
 
-        const { data: photos } = await supabase.from('snag_photos').select('*').eq('snag_id', snag.id);
+        if (isOffline) {
+            await queueMutation('snags', 'DELETE', { id: snag.id });
+        } else {
+            const { data: photos } = await supabase.from('snag_photos').select('*').eq('snag_id', snag.id);
 
-        if (photos && photos.length > 0) {
-            const bucket = supabase.storage.from('snag-photos');
-            const files = photos
-                .map((photo) => {
-                    const url = (photo as Database['public']['Tables']['snag_photos']['Row']).photo_url;
-                    return url.split('/storage/v1/object/public/snag-photos/')[1];
-                })
-                .filter(Boolean) as string[];
+            if (photos && photos.length > 0) {
+                const bucket = supabase.storage.from('snag-photos');
+                const files = photos
+                    .map((photo) => {
+                        const url = (photo as Database['public']['Tables']['snag_photos']['Row']).photo_url;
+                        return url.split('/storage/v1/object/public/snag-photos/')[1];
+                    })
+                    .filter(Boolean) as string[];
 
-            if (files.length) {
-                await bucket.remove(files);
+                if (files.length) {
+                    await bucket.remove(files);
+                }
+                await supabase.from('snag_photos').delete().eq('snag_id', snag.id);
             }
-            await supabase.from('snag_photos').delete().eq('snag_id', snag.id);
+            await supabase.from('snag_comments').delete().eq('snag_id', snag.id);
+            await supabase.from('snags').delete().eq('id', snag.id);
         }
-        await supabase.from('snag_comments').delete().eq('snag_id', snag.id);
-        await supabase.from('snags').delete().eq('id', snag.id);
 
         if (selected?.id === snag.id) onSelect(null);
         onSnagChange();

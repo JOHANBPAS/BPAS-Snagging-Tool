@@ -18,9 +18,23 @@ const Protected: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return <>{children}</>;
 };
 
+import { OfflineBanner } from './components/OfflineBanner';
+import { syncMutations } from './services/syncService';
+
 const App = () => {
+  React.useEffect(() => {
+    const handleOnline = () => {
+      // eslint-disable-next-line no-console
+      console.log('Back online, syncing mutations...');
+      syncMutations();
+    };
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, []);
+
   return (
     <AuthProvider>
+      <OfflineBanner />
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
