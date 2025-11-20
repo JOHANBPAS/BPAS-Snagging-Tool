@@ -110,15 +110,15 @@ export const PlanManager: React.FC<Props> = ({
 
     return (
         <div className="space-y-4">
-            <div className="flex items-center justify-between">
-                <div className="flex gap-2 overflow-x-auto pb-2">
+            <div className="flex items-center justify-between gap-4">
+                <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
                     {plans.map((plan) => (
                         <button
                             key={plan.id}
                             onClick={() => setActivePlanId(plan.id)}
                             className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition ${activePlanId === plan.id
-                                    ? 'bg-bpas-black text-white shadow-md'
-                                    : 'bg-white text-slate-600 hover:bg-slate-50'
+                                ? 'bg-bpas-black text-white shadow-md'
+                                : 'bg-white text-slate-600 hover:bg-slate-50'
                                 }`}
                         >
                             {plan.name}
@@ -132,7 +132,15 @@ export const PlanManager: React.FC<Props> = ({
                         </button>
                     )}
                 </div>
-                <div className="flex-shrink-0">
+                <div className="flex-shrink-0 flex items-center gap-2">
+                    {activePlanId && (
+                        <button
+                            onClick={() => handleDeletePlan(activePlanId)}
+                            className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-100 transition"
+                        >
+                            Delete
+                        </button>
+                    )}
                     <FileUpload
                         label={loading ? "Uploading..." : "Add Plan"}
                         bucket="plans"
@@ -149,14 +157,6 @@ export const PlanManager: React.FC<Props> = ({
                         snags={snags.filter(s => s.plan_id === activePlanId || (!s.plan_id && !activePlanId))} // Filter snags by plan
                         onSelectLocation={(coords) => onSelectLocation({ ...coords, planId: activePlanId || '' })}
                     />
-                    {activePlanId && (
-                        <button
-                            onClick={() => handleDeletePlan(activePlanId)}
-                            className="absolute top-4 right-4 rounded bg-white/90 px-2 py-1 text-xs font-bold text-rose-600 shadow hover:bg-rose-50"
-                        >
-                            Delete Plan
-                        </button>
-                    )}
                 </div>
             ) : (
                 <div className="flex h-64 flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 text-slate-500">

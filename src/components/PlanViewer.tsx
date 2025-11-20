@@ -126,7 +126,7 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
     onSelectLocation({ x: Number(x.toFixed(3)), y: Number(y.toFixed(3)), page: currentPageNumber });
   };
 
-  const clampScale = (next: number) => Math.min(3, Math.max(1, next));
+  const clampScale = (next: number) => Math.min(4, Math.max(1, next));
 
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
@@ -205,7 +205,7 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
       )}
       {planUrl ? (
         (isPdf ? pdfDoc : imagePlan) ? (
-          <div className="relative aspect-[16/9] w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
+          <div className="relative h-[50vh] md:h-auto md:aspect-[16/9] w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
             <div
               ref={containerRef}
               onClick={handleClick}
@@ -311,7 +311,7 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
         ) : loadingPdf ? (
           <p className="text-sm text-slate-600">Loading floor plan…</p>
         ) : (
-          <div className="relative aspect-[16/9] w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+          <div className="relative h-[50vh] md:h-auto md:aspect-[16/9] w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
             <iframe
               src={`${planUrl}#toolbar=0`}
               title="Floor plan PDF"

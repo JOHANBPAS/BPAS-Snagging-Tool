@@ -8,13 +8,29 @@ import { useAuth } from '../hooks/useAuth';
 const Projects: React.FC = () => {
   const { user, profile } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
+  const [snagCounts, setSnagCounts] = useState<Record<string, number>>({});
   const [form, setForm] = useState<Partial<Project>>({ name: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchProjects = async () => {
-    const { data } = await supabase.from('projects').select('*').order('created_at', { ascending: false });
-    setProjects((data as Project[]) || []);
+    const { data: projectsData } = await supabase.from('projects').select('*').order('created_at', { ascending: false });
+    setProjects((projectsData as Project[]) || []);
+
+    // Fetch open snags count for all projects
+    // Note: In a larger app, this should be a database view or a function
+    const { data: snagsData } = await supabase
+      .from('snags')
+      .select('project_id, status')
+      .neq('status', 'verified'); // Count everything not verified as "open" or "in progress"
+
+    if (snagsData) {
+      const counts: Record<string, number> = {};
+      snagsData.forEach((snag: { project_id: string; status: string }) => {
+        counts[snag.project_id] = (counts[snag.project_id] || 0) + 1;
+      });
+      setSnagCounts(counts);
+    }
   };
 
   useEffect(() => {
@@ -107,7 +123,7 @@ const Projects: React.FC = () => {
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {projects.map((project) => (
-          <ProjectCard key={project.id} project={project} />
+          <ProjectCard key={project.id} project={project} openSnagCount={snagCounts[project.id] || 0} />
         ))}
         {projects.length === 0 && <p className="text-sm text-slate-600">No projects yet.</p>}
       </div>

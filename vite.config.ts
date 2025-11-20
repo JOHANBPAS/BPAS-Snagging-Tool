@@ -27,6 +27,7 @@ export default defineConfig({
         ],
       },
       workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/gzwarhhhvkhjosqzrffw\.supabase\.co\/storage\/v1\/object\/public\/plans\/.*/i,

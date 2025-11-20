@@ -64,13 +64,15 @@ const ProjectDetail: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <ProjectHeader project={project} completedPct={summary.completedPct} />
+      <ProjectHeader
+        project={project}
+        completedPct={summary.completedPct}
+        action={<ReportPreview project={project} snags={snags} />}
+      />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-3 space-y-4">
-          <div className="flex justify-end">
-            <ReportPreview project={project} snags={snags} />
-          </div>
+          {/* Content removed as it's now in header */}
         </div>
       </div>
 
