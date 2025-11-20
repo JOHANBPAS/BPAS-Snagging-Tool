@@ -18,7 +18,7 @@ export const ProjectCard: React.FC<Props> = ({ project, openSnagCount = 0 }) => 
           <p className="text-xs uppercase tracking-wide text-slate-500">{project.client_name || 'Client TBD'}</p>
           <h3 className="text-lg font-semibold text-slate-900">{project.name}</h3>
         </div>
-        <span className="rounded-full bg-brand/10 px-3 py-1 text-xs font-semibold text-brand">
+        <span className="rounded-full bg-bpas-yellow px-3 py-1 text-xs font-semibold text-bpas-black shadow-sm">
           {project.status || 'active'}
         </span>
       </div>

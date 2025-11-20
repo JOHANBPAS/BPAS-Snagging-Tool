@@ -41,12 +41,12 @@ const ResetPassword: React.FC = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white shadow disabled:opacity-60"
+            className="w-full rounded-lg bg-bpas-yellow px-4 py-2 text-sm font-semibold text-bpas-black shadow hover:bg-yellow-500 disabled:opacity-60"
           >
             {loading ? 'Sending...' : 'Send reset link'}
           </button>
           <div className="text-center text-sm text-slate-600">
-            <Link className="text-brand" to="/login">
+            <Link className="font-semibold text-slate-900 hover:text-bpas-yellow transition" to="/login">
               Back to login
             </Link>
           </div>

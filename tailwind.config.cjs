@@ -12,9 +12,9 @@ module.exports = {
       },
       colors: {
         brand: {
-          DEFAULT: '#0F766E',
-          light: '#14B8A6',
-          dark: '#0B4E47',
+          DEFAULT: '#eba000', // BPAS Yellow
+          light: '#f5b029',
+          dark: '#c78800',
         },
         bpas: {
           black: '#121212',
