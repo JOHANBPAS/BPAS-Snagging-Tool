@@ -198,11 +198,24 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
 
   const clampScale = (next: number) => Math.min(4, Math.max(1, next));
 
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    const next = clampScale(scale + (e.deltaY > 0 ? -0.1 : 0.1));
-    setScale(next);
-  };
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      // Use a small delta for smoother zooming
+      const delta = e.deltaY > 0 ? -0.1 : 0.1;
+      setScale((s) => clampScale(s + delta));
+    };
+
+    // Add non-passive listener to ensure preventDefault works
+    container.addEventListener('wheel', onWheel, { passive: false });
+
+    return () => {
+      container.removeEventListener('wheel', onWheel);
+    };
+  }, []);
 
   const startPan = (e: React.MouseEvent<HTMLDivElement>) => {
     if (scale <= 1) return;

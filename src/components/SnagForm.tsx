@@ -290,8 +290,14 @@ export const SnagForm: React.FC<Props> = ({
             value={form.location || ''}
             onChange={(e) => handleChange('location', e.target.value)}
             placeholder="Level 2 - Bedroom 3"
+            list="locations-list"
             className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-brand focus:bg-white focus:outline-none"
           />
+          <datalist id="locations-list">
+            {existingLocations.map((loc) => (
+              <option key={loc} value={loc} />
+            ))}
+          </datalist>
         </label>
       </div>
       <label className="space-y-1 text-sm">
