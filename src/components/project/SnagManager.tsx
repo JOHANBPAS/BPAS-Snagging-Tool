@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { SnagList } from '../SnagList';
 import { SnagDetailModal } from '../SnagDetailModal';
 import { SnagForm } from '../SnagForm';
@@ -33,6 +33,20 @@ export const SnagManager: React.FC<Props> = ({
     onCoordsClear,
     onSnagChange,
 }) => {
+    const [searchQuery, setSearchQuery] = useState('');
+    const [statusFilter, setStatusFilter] = useState<string>('all');
+
+    const filteredSnags = useMemo(() => {
+        return snags.filter((snag) => {
+            const matchesSearch =
+                snag.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                snag.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                snag.id.toLowerCase().includes(searchQuery.toLowerCase());
+            const matchesStatus = statusFilter === 'all' || snag.status === statusFilter;
+            return matchesSearch && matchesStatus;
+        });
+    }, [snags, searchQuery, statusFilter]);
+
     const handleDelete = async (snag: Snag) => {
         if (!window.confirm('Are you sure you want to delete this snag? This action cannot be undone.')) return;
 
@@ -62,7 +76,32 @@ export const SnagManager: React.FC<Props> = ({
     return (
         <>
             <div className="w-full space-y-4">
-                <SnagList snags={snags} onSelect={onSelect} onEdit={onEdit} onDelete={handleDelete} />
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="relative flex-1">
+                        <input
+                            type="text"
+                            placeholder="Search snags..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm focus:border-bpas-yellow focus:outline-none focus:ring-1 focus:ring-bpas-yellow"
+                        />
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <select
+                            value={statusFilter}
+                            onChange={(e) => setStatusFilter(e.target.value)}
+                            className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-bpas-yellow focus:outline-none focus:ring-1 focus:ring-bpas-yellow"
+                        >
+                            <option value="all">All Statuses</option>
+                            <option value="open">Open</option>
+                            <option value="in_progress">In Progress</option>
+                            <option value="completed">Completed</option>
+                            <option value="verified">Verified</option>
+                        </select>
+                    </div>
+                </div>
+
+                <SnagList snags={filteredSnags} onSelect={onSelect} onEdit={onEdit} onDelete={handleDelete} />
             </div>
 
             {selected && (

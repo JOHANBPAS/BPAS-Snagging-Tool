@@ -4,6 +4,7 @@ import { ChecklistField, Profile, Snag, SnagPriority, SnagStatus } from '../type
 import { Database } from '../types/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { normalizeUuid } from '../lib/format';
+import { resizeImage } from '../lib/imageUtils';
 
 interface Props {
   projectId: string;
@@ -92,19 +93,28 @@ export const SnagForm: React.FC<Props> = ({
     if (!pendingPhotos.length) return;
     const bucket = supabase.storage.from('snag-photos');
     for (const { file } of pendingPhotos) {
-      const ext = file.name.split('.').pop() || 'jpg';
-      const path = `${snagId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-      const { error: uploadError } = await bucket.upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type });
-      if (uploadError) {
-        // eslint-disable-next-line no-console
-        console.warn('Photo upload failed', uploadError.message);
-        continue;
+      try {
+        const resizedBlob = await resizeImage(file);
+        const ext = file.name.split('.').pop() || 'jpg';
+        const path = `${snagId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        const { error: uploadError } = await bucket.upload(path, resizedBlob, {
+          cacheControl: '3600',
+          upsert: false,
+          contentType: 'image/jpeg',
+        });
+        if (uploadError) {
+          // eslint-disable-next-line no-console
+          console.warn('Photo upload failed', uploadError.message);
+          continue;
+        }
+        const { data: urlData } = bucket.getPublicUrl(path);
+        await supabase.from('snag_photos').insert({
+          snag_id: snagId,
+          photo_url: urlData.publicUrl,
+        } as Database['public']['Tables']['snag_photos']['Insert']);
+      } catch (e) {
+        console.error('Failed to process image', e);
       }
-      const { data: urlData } = bucket.getPublicUrl(path);
-      await supabase.from('snag_photos').insert({
-        snag_id: snagId,
-        photo_url: urlData.publicUrl,
-      } as Database['public']['Tables']['snag_photos']['Insert']);
     }
     setPendingPhotos([]);
   };
