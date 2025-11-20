@@ -38,14 +38,13 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
   const markers = useMemo(
     () =>
       snags
-        .map((s, index) => ({ ...s, globalIndex: index + 1 })) // Assign global index first
         .filter(
           (s) =>
             s.plan_x != null &&
             s.plan_y != null &&
             (s.plan_page ?? 1) === currentPageNumber,
         )
-        .map((s) => ({ id: s.id, x: s.plan_x as number, y: s.plan_y as number, title: s.title, index: s.globalIndex })),
+        .map((s) => ({ id: s.id, x: s.plan_x as number, y: s.plan_y as number, title: s.title, index: s.friendly_id })),
     [snags, currentPageNumber],
   );
 

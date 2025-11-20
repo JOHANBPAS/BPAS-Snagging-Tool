@@ -25,8 +25,18 @@ const ProjectDetail: React.FC = () => {
 
   const fetchSnags = async () => {
     if (!projectId) return;
-    const { data } = await supabase.from('snags').select('*').eq('project_id', projectId);
-    setSnags((data as Snag[]) || []);
+    const { data } = await supabase
+      .from('snags')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: true }); // Ensure stable order
+
+    const snagsWithId = (data as Snag[] || []).map((s, index) => ({
+      ...s,
+      friendly_id: index + 1
+    }));
+
+    setSnags(snagsWithId);
   };
 
   useEffect(() => {

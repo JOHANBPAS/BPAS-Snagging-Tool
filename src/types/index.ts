@@ -51,6 +51,7 @@ export interface Snag {
   plan_id: string | null;
   created_by: string | null;
   created_at: string;
+  friendly_id?: number; // Global index for display (1, 2, 3...)
 }
 
 export interface SnagPhoto {

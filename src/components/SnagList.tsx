@@ -41,7 +41,7 @@ export const SnagList: React.FC<Props> = ({ snags, onSelect, onEdit, onDelete })
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold text-white">
-                {index + 1}
+                {snag.friendly_id || index + 1}
               </span>
               <span className="text-xs font-mono text-slate-500">#{snag.id.slice(0, 4)}</span>
             </div>
@@ -85,7 +85,7 @@ export const SnagList: React.FC<Props> = ({ snags, onSelect, onEdit, onDelete })
         <div className="hidden sm:grid sm:grid-cols-12 sm:gap-2 sm:items-center text-sm">
           <span className="col-span-2 truncate text-xs font-mono text-slate-500 flex items-center">
             <span className="mr-2 inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-rose-500 text-xs font-bold text-white">
-              {index + 1}
+              {snag.friendly_id || index + 1}
             </span>
             {snag.id.slice(0, 6)}
           </span>
