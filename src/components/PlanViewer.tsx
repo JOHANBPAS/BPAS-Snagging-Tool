@@ -297,7 +297,6 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
             <div
               ref={containerRef}
               onClick={handleClick}
-              onWheel={handleWheel}
               onMouseDown={startPan}
               onMouseMove={(e) => {
                 if (!containerRef.current || !contentRect) return;
