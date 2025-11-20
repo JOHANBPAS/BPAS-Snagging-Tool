@@ -35,6 +35,7 @@ export const SnagManager: React.FC<Props> = ({
 }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('all');
+    const [deleteId, setDeleteId] = useState<string | null>(null);
 
     const filteredSnags = useMemo(() => {
         return snags.filter((snag) => {
@@ -47,8 +48,14 @@ export const SnagManager: React.FC<Props> = ({
         });
     }, [snags, searchQuery, statusFilter]);
 
-    const handleDelete = async (snag: Snag) => {
-        if (!window.confirm('Are you sure you want to delete this snag? This action cannot be undone.')) return;
+    const confirmDelete = (snag: Snag) => {
+        setDeleteId(snag.id);
+    };
+
+    const executeDelete = async () => {
+        if (!deleteId) return;
+        const snag = snags.find((s) => s.id === deleteId);
+        if (!snag) return;
 
         const { data: photos } = await supabase.from('snag_photos').select('*').eq('snag_id', snag.id);
 
@@ -71,6 +78,7 @@ export const SnagManager: React.FC<Props> = ({
 
         if (selected?.id === snag.id) onSelect(null);
         onSnagChange();
+        setDeleteId(null);
     };
 
     return (
@@ -101,14 +109,14 @@ export const SnagManager: React.FC<Props> = ({
                     </div>
                 </div>
 
-                <SnagList snags={filteredSnags} onSelect={onSelect} onEdit={onEdit} onDelete={handleDelete} />
+                <SnagList snags={filteredSnags} onSelect={onSelect} onEdit={onEdit} onDelete={confirmDelete} />
             </div>
 
             {selected && (
                 <SnagDetailModal
                     snag={selected}
                     onClose={() => onSelect(null)}
-                    onDelete={handleDelete}
+                    onDelete={confirmDelete}
                     onEdit={(snagToEdit) => onEdit(snagToEdit)}
                 />
             )}
@@ -136,6 +144,31 @@ export const SnagManager: React.FC<Props> = ({
                                 onCoordsClear();
                             }}
                         />
+                    </div>
+                </div>
+            )}
+
+            {deleteId && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 px-4">
+                    <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl">
+                        <h3 className="text-lg font-semibold text-slate-900">Delete Snag?</h3>
+                        <p className="mt-2 text-sm text-slate-600">
+                            Are you sure you want to delete this snag? This action cannot be undone and will remove all associated photos.
+                        </p>
+                        <div className="mt-6 flex justify-end gap-3">
+                            <button
+                                onClick={() => setDeleteId(null)}
+                                className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={executeDelete}
+                                className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700"
+                            >
+                                Delete
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
