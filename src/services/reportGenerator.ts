@@ -371,13 +371,13 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
         doc.setFontSize(16);
         doc.setTextColor(brandColors.black);
         doc.text('Snag photos', margin, y);
-        y += 24;
+        y += 30; // Increased spacing after header
 
         const ensureSpace = (heightNeeded: number) => {
-            if (y + heightNeeded > pageHeight - 100) { // Increased bottom margin for footer safety
+            if (y + heightNeeded > pageHeight - 80) { // Increased bottom margin safety
                 doc.addPage();
                 drawLetterhead(doc);
-                y = 120;
+                y = 140; // Increased top margin for new pages to avoid header overlap
             }
         };
 

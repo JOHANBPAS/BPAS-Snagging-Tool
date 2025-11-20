@@ -137,6 +137,7 @@ export const SnagManager: React.FC<Props> = ({
                             initialSnag={editingSnag || undefined}
                             coords={editingSnag ? editCoords : createCoords}
                             checklistFields={checklistFields}
+                            existingLocations={Array.from(new Set(snags.map(s => s.location).filter(Boolean))) as string[]}
                             onCoordsClear={onCoordsClear}
                             onCreated={() => {
                                 onSnagChange();

@@ -52,37 +52,48 @@ export const PlanManager: React.FC<Props> = ({
         }
     };
 
-    const handlePlanUpload = async (url: string) => {
+    const handlePlanUpload = async (urlOrUrls: string | string[]) => {
         if (!project.id) return;
         setLoading(true);
 
-        // Create a new plan entry
-        const newPlan: Database['public']['Tables']['project_plans']['Insert'] = {
-            project_id: project.id,
-            name: `Plan ${plans.length + 1}`,
-            url: url,
-            order: plans.length,
-        };
+        const urls = Array.isArray(urlOrUrls) ? urlOrUrls : [urlOrUrls];
+        const newPlans: ProjectPlan[] = [];
 
-        const { data, error } = await supabase
-            .from('project_plans')
-            .insert(newPlan)
-            .select()
-            .single();
+        for (const url of urls) {
+            // Create a new plan entry
+            const newPlan: Database['public']['Tables']['project_plans']['Insert'] = {
+                project_id: project.id,
+                name: `Plan ${plans.length + newPlans.length + 1}`,
+                url: url,
+                order: plans.length + newPlans.length,
+            };
 
-        if (error) {
-            console.error('Error creating plan:', error);
-        } else if (data) {
-            setPlans([...plans, data]);
-            setActivePlanId(data.id);
+            const { data, error } = await supabase
+                .from('project_plans')
+                .insert(newPlan)
+                .select()
+                .single();
+
+            if (error) {
+                console.error('Error creating plan:', error);
+            } else if (data) {
+                newPlans.push(data);
+            }
+        }
+
+        if (newPlans.length > 0) {
+            setPlans([...plans, ...newPlans]);
+            if (!activePlanId) {
+                setActivePlanId(newPlans[0].id);
+            }
 
             // If this is the first plan, also update the project's legacy plan_image_url for backward compatibility
             if (plans.length === 0) {
                 await supabase
                     .from('projects')
-                    .update({ plan_image_url: url } as any)
+                    .update({ plan_image_url: newPlans[0].url } as any)
                     .eq('id', project.id);
-                onProjectUpdate({ ...project, plan_image_url: url });
+                onProjectUpdate({ ...project, plan_image_url: newPlans[0].url });
             }
         }
         setLoading(false);

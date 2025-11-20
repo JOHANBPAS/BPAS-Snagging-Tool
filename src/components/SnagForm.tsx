@@ -17,6 +17,7 @@ interface Props {
   checklistFields?: ChecklistField[];
   contractors?: Profile[];
   coords?: { x: number; y: number; page: number; planId?: string } | null;
+  existingLocations?: string[];
   onCoordsClear?: () => void;
 }
 
@@ -34,6 +35,7 @@ export const SnagForm: React.FC<Props> = ({
   checklistFields = [],
   contractors = [],
   coords = null,
+  existingLocations = [],
   onCoordsClear,
 }) => {
   const { user } = useAuth();
