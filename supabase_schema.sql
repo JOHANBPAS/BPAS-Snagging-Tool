@@ -222,3 +222,22 @@ create policy "Authenticated users can create reports." on public.project_report
 -- insert into storage.buckets (id, name) values ('project-plans', 'project-plans') on conflict do nothing;
 -- insert into storage.buckets (id, name) values ('snag-photos', 'snag-photos') on conflict do nothing;
 -- insert into storage.buckets (id, name) values ('project-reports', 'project-reports') on conflict do nothing;
+
+-- MIGRATION: Ensure columns exist for existing tables
+-- This handles cases where the table already exists but is missing new columns
+do $$
+begin
+  -- Snags: plan_id, plan_x, plan_y, plan_page
+  if not exists (select 1 from information_schema.columns where table_name = 'snags' and column_name = 'plan_id') then
+    alter table public.snags add column plan_id uuid references public.project_plans(id);
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'snags' and column_name = 'plan_x') then
+    alter table public.snags add column plan_x float;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'snags' and column_name = 'plan_y') then
+    alter table public.snags add column plan_y float;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'snags' and column_name = 'plan_page') then
+    alter table public.snags add column plan_page integer;
+  end if;
+end $$;

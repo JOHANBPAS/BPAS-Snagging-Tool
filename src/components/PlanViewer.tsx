@@ -21,6 +21,7 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [imagePlan, setImagePlan] = useState<string | null>(null);
+  const [planDimensions, setPlanDimensions] = useState<{ width: number; height: number } | null>(null);
 
   // PDF State
   const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null);
@@ -33,16 +34,18 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
   const totalPages = planUrl ? (isPdf ? (pdfDoc?.numPages || 0) : imagePlan ? 1 : 0) : 0;
   const currentPageNumber = totalPages ? currentPage + 1 : 1;
 
+  // Calculate markers with GLOBAL index
   const markers = useMemo(
     () =>
       snags
+        .map((s, index) => ({ ...s, globalIndex: index + 1 })) // Assign global index first
         .filter(
           (s) =>
             s.plan_x != null &&
             s.plan_y != null &&
             (s.plan_page ?? 1) === currentPageNumber,
         )
-        .map((s) => ({ id: s.id, x: s.plan_x as number, y: s.plan_y as number, title: s.title })),
+        .map((s) => ({ id: s.id, x: s.plan_x as number, y: s.plan_y as number, title: s.title, index: s.globalIndex })),
     [snags, currentPageNumber],
   );
 
@@ -57,6 +60,7 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
     resetView();
     setCurrentPage(0);
     setPdfDoc(null);
+    setPlanDimensions(null);
 
     if (!planUrl) {
       setImagePlan(null);
@@ -87,6 +91,12 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
     } else {
       setImagePlan(planUrl);
       setRenderError(null);
+      // Get image dimensions
+      const img = new Image();
+      img.onload = () => {
+        setPlanDimensions({ width: img.naturalWidth, height: img.naturalHeight });
+      };
+      img.src = planUrl;
     }
   }, [planUrl, isPdf]);
 
@@ -99,6 +109,8 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
         setRenderingPage(true);
         const page = await pdfDoc.getPage(currentPage + 1);
         const viewport = page.getViewport({ scale: 1.5 }); // Render at higher resolution
+        setPlanDimensions({ width: viewport.width, height: viewport.height });
+
         const canvas = canvasRef.current;
         const ctx = canvas?.getContext('2d');
 
@@ -118,12 +130,71 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
     render();
   }, [pdfDoc, currentPage]);
 
+  // Calculate the actual rendered rect of the plan within the container
+  const getContentRect = () => {
+    if (!containerRef.current || !planDimensions) return null;
+    const container = containerRef.current.getBoundingClientRect();
+    const containerAspect = container.width / container.height;
+    const planAspect = planDimensions.width / planDimensions.height;
+
+    let width, height, left, top;
+
+    if (containerAspect > planAspect) {
+      // Container is wider than plan -> plan fits height
+      height = container.height;
+      width = height * planAspect;
+      top = 0;
+      left = (container.width - width) / 2;
+    } else {
+      // Container is taller than plan -> plan fits width
+      width = container.width;
+      height = width / planAspect;
+      left = 0;
+      top = (container.height - height) / 2;
+    }
+
+    return { width, height, left, top, containerLeft: container.left, containerTop: container.top };
+  };
+
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!containerRef.current || !totalPages) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const x = (e.clientX - rect.left - pan.x) / (rect.width * scale);
-    const y = (e.clientY - rect.top - pan.y) / (rect.height * scale);
-    onSelectLocation({ x: Number(x.toFixed(3)), y: Number(y.toFixed(3)), page: currentPageNumber });
+
+    const rect = getContentRect();
+    if (!rect) return;
+
+    // Calculate click position relative to the rendered plan image
+    // Account for pan and scale
+    // The click event is on the container, but we need coordinates relative to the transformed content
+
+    // Actually, let's simplify. We can calculate relative to the container, then adjust for content rect, then adjust for pan/scale.
+    // But wait, the click is on the transformed element if we put onClick there? 
+    // No, onClick is on the container.
+
+    // Mouse relative to container (unscaled, unpanned space)
+    const mouseX = e.clientX - rect.containerLeft;
+    const mouseY = e.clientY - rect.containerTop;
+
+    // Adjust for Pan and Scale to get back to "container space" if it wasn't transformed
+    // The content div is transformed by translate(pan.x, pan.y) scale(scale)
+    // So the "virtual" position in the un-transformed container is:
+    const transformedX = (mouseX - pan.x) / scale;
+    const transformedY = (mouseY - pan.y) / scale;
+
+    // Now check if this falls within the image rect (which is centered in the container)
+    // The image rect is at (rect.left, rect.top) with dimensions (rect.width, rect.height)
+
+    // Relative to image top-left
+    const imageX = transformedX - rect.left;
+    const imageY = transformedY - rect.top;
+
+    // Normalize to 0-1
+    const normalizedX = imageX / rect.width;
+    const normalizedY = imageY / rect.height;
+
+    // Check bounds
+    if (normalizedX >= 0 && normalizedX <= 1 && normalizedY >= 0 && normalizedY <= 1) {
+      onSelectLocation({ x: Number(normalizedX.toFixed(3)), y: Number(normalizedY.toFixed(3)), page: currentPageNumber });
+    }
   };
 
   const clampScale = (next: number) => Math.min(4, Math.max(1, next));
@@ -146,6 +217,11 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
   };
 
   const endPan = () => setIsPanning(false);
+
+  // Helper to position markers
+  // We need to render markers relative to the IMAGE, not the container.
+  // The easiest way is to have a wrapper div that exactly matches the image dimensions and position.
+  const contentRect = getContentRect();
 
   return (
     <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -212,15 +288,27 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
               onWheel={handleWheel}
               onMouseDown={startPan}
               onMouseMove={(e) => {
-                if (!containerRef.current) return;
-                const rect = containerRef.current.getBoundingClientRect();
+                if (!containerRef.current || !contentRect) return;
                 if (scale > 1) {
                   onPan(e);
                 }
-                setHovered({
-                  x: (e.clientX - rect.left - pan.x) / (rect.width * scale),
-                  y: (e.clientY - rect.top - pan.y) / (rect.height * scale),
-                });
+
+                // Calculate hover relative to image
+                // Same logic as click
+                const mouseX = e.clientX - contentRect.containerLeft;
+                const mouseY = e.clientY - contentRect.containerTop;
+                const transformedX = (mouseX - pan.x) / scale;
+                const transformedY = (mouseY - pan.y) / scale;
+                const imageX = transformedX - contentRect.left;
+                const imageY = transformedY - contentRect.top;
+                const normalizedX = imageX / contentRect.width;
+                const normalizedY = imageY / contentRect.height;
+
+                if (normalizedX >= 0 && normalizedX <= 1 && normalizedY >= 0 && normalizedY <= 1) {
+                  setHovered({ x: normalizedX, y: normalizedY });
+                } else {
+                  setHovered(null);
+                }
               }}
               onMouseLeave={() => {
                 setHovered(null);
@@ -277,6 +365,7 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
                   transformOrigin: 'top left',
                 }}
               >
+                {/* Render Image/Canvas */}
                 {isPdf ? (
                   <>
                     <canvas ref={canvasRef} className="h-full w-full object-contain" />
@@ -290,18 +379,33 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
                   <img src={imagePlan!} className="h-full w-full object-contain" />
                 )}
 
-                {markers.map((marker, idx) => (
+                {/* Render Markers Overlay - Positioned exactly over the image content */}
+                {contentRect && (
                   <div
-                    key={marker.id}
-                    className="absolute flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-rose-500 text-xs font-bold text-white shadow-sm border border-white"
-                    style={{ left: `${marker.x * 100}%`, top: `${marker.y * 100}%` }}
-                    title={marker.title}
+                    className="absolute"
+                    style={{
+                      left: contentRect.left,
+                      top: contentRect.top,
+                      width: contentRect.width,
+                      height: contentRect.height,
+                      pointerEvents: 'none' // Let clicks pass through to container
+                    }}
                   >
-                    {idx + 1}
+                    {markers.map((marker) => (
+                      <div
+                        key={marker.id}
+                        className="absolute flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-rose-500 text-xs font-bold text-white shadow-sm border border-white"
+                        style={{ left: `${marker.x * 100}%`, top: `${marker.y * 100}%` }}
+                        title={marker.title}
+                      >
+                        {marker.index}
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
+
                 {hovered && (
-                  <div className="absolute bottom-2 right-2 rounded-lg bg-black/60 px-2 py-1 text-xs text-white">
+                  <div className="absolute bottom-2 right-2 rounded-lg bg-black/60 px-2 py-1 text-xs text-white z-10">
                     {`${(hovered.x * 100).toFixed(1)}%, ${(hovered.y * 100).toFixed(1)}%`}
                   </div>
                 )}

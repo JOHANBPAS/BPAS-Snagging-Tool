@@ -67,16 +67,20 @@ const getFloorPlans = async (project: Project): Promise<Array<{ planId: string; 
     const results: Array<{ planId: string; name: string; page: number; image: string }> = [];
 
     if (plans && plans.length > 0) {
-        for (const plan of plans) {
+        // Process plans in parallel
+        const planPromises = plans.map(async (plan) => {
+            const planResults: Array<{ planId: string; name: string; page: number; image: string }> = [];
             if (plan.url.toLowerCase().endsWith('.pdf')) {
                 const { GlobalWorkerOptions, getDocument } = await import('pdfjs-dist/legacy/build/pdf');
                 const workerSrc = new URL('pdfjs-dist/legacy/build/pdf.worker.min.mjs', import.meta.url).toString();
                 GlobalWorkerOptions.workerSrc = workerSrc;
                 try {
                     const response = await fetch(plan.url);
-                    if (!response.ok) continue;
+                    if (!response.ok) return [];
                     const buffer = await response.arrayBuffer();
                     const pdf = await getDocument({ data: buffer }).promise;
+
+                    // Process pages sequentially to avoid memory spikes, but plans are parallel
                     for (let pageIndex = 1; pageIndex <= pdf.numPages; pageIndex++) {
                         const page = await pdf.getPage(pageIndex);
                         const viewport = page.getViewport({ scale: 1.3 });
@@ -87,7 +91,7 @@ const getFloorPlans = async (project: Project): Promise<Array<{ planId: string; 
                         canvas.height = viewport.height;
                         await page.render({ canvasContext: context, viewport }).promise;
                         const image = canvas.toDataURL('image/jpeg', 0.85);
-                        results.push({ planId: plan.id, name: plan.name, page: pageIndex, image });
+                        planResults.push({ planId: plan.id, name: plan.name, page: pageIndex, image });
                     }
                 } catch (e) {
                     console.error(`Failed to load PDF for plan ${plan.name}`, e);
@@ -95,10 +99,15 @@ const getFloorPlans = async (project: Project): Promise<Array<{ planId: string; 
             } else {
                 const data = await toDataUrl(plan.url);
                 if (data) {
-                    results.push({ planId: plan.id, name: plan.name, page: 1, image: data });
+                    planResults.push({ planId: plan.id, name: plan.name, page: 1, image: data });
                 }
             }
-        }
+            return planResults;
+        });
+
+        const allPlanResults = await Promise.all(planPromises);
+        allPlanResults.forEach(p => results.push(...p));
+
     } else if (project.plan_image_url) {
         // Fallback to legacy single plan
         const url = project.plan_image_url;
@@ -233,6 +242,16 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
         return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
     });
 
+    // Map original snags to their sorted index for consistent numbering
+    const snagIndexMap = new Map<string, number>();
+    // Use the original list order for numbering if possible, or the sorted order?
+    // The user asked for "Plan numbers be changed to be the same as the numbers in the list".
+    // The list in the UI is typically sorted by creation or filtered.
+    // Ideally, we should respect the order passed in `snags` (which comes from the UI).
+    // But here we sort `sortedSnags` for grouping by floor.
+    // So we should use the index from the INPUT `snags` array.
+    snags.forEach((s, i) => snagIndexMap.set(s.id, i + 1));
+
     const floorPlans = await getFloorPlans(project);
     if (floorPlans.length) {
         for (let idx = 0; idx < floorPlans.length; idx++) {
@@ -283,11 +302,11 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                     doc.circle(x, y, 6, 'F'); // Slightly larger for visibility
 
                     // Draw number
-                    const snagIndex = sortedSnags.findIndex(s => s.id === snag.id);
-                    if (snagIndex !== -1) {
+                    const globalIndex = snagIndexMap.get(snag.id) || 0;
+                    if (globalIndex) {
                         doc.setTextColor(255, 255, 255);
                         doc.setFontSize(7);
-                        doc.text(String(snagIndex + 1), x, y, { align: 'center', baseline: 'middle' });
+                        doc.text(String(globalIndex), x, y, { align: 'center', baseline: 'middle' });
                     }
                 }
             });
@@ -319,8 +338,8 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
         head: [['#', 'Title', 'Location', 'Status', 'Priority', 'Due']],
         styles: { fontSize: 9, font: 'helvetica' },
         headStyles: { fillColor: [235, 160, 0], textColor: [18, 18, 18] },
-        body: sortedSnags.map((snag, idx) => [
-            idx + 1,
+        body: sortedSnags.map((snag) => [
+            snagIndexMap.get(snag.id) || '-',
             snag.title,
             snag.location || '—',
             snag.status,
@@ -362,119 +381,136 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
             }
         };
 
-        for (let i = 0; i < sortedSnags.length; i++) {
-            onProgress?.(`Adding photos for snag ${i + 1} of ${sortedSnags.length}...`);
-            await yieldToMain();
+        // Batch process snags to fetch photos in parallel chunks
+        const BATCH_SIZE = 5;
+        for (let i = 0; i < sortedSnags.length; i += BATCH_SIZE) {
+            const batch = sortedSnags.slice(i, i + BATCH_SIZE);
 
-            const snag = sortedSnags[i];
+            // Fetch photos for the batch in parallel
+            const batchResults = await Promise.all(batch.map(async (snag) => {
+                onProgress?.(`Fetching photos for snag ${snagIndexMap.get(snag.id)}...`);
 
-            // JIT Photo Loading
-            const { data: photoRows } = await supabase.from('snag_photos').select('photo_url').eq('snag_id', snag.id);
-            const photos: string[] = [];
+                // JIT Photo Loading
+                const { data: photoRows } = await supabase.from('snag_photos').select('photo_url').eq('snag_id', snag.id);
+                const photos: string[] = [];
 
-            if (photoRows && photoRows.length > 0) {
-                for (const row of photoRows) {
-                    const imgData = await toDataUrl(row.photo_url);
-                    if (imgData) {
-                        const scaled = await downscaleImage(imgData, 1200, 0.7);
-                        photos.push(scaled);
+                if (photoRows && photoRows.length > 0) {
+                    // Fetch and downscale photos in parallel
+                    const photoPromises = photoRows.map(async (row) => {
+                        const imgData = await toDataUrl(row.photo_url);
+                        if (imgData) {
+                            return await downscaleImage(imgData, 1200, 0.7);
+                        }
+                        return null;
+                    });
+                    const results = await Promise.all(photoPromises);
+                    photos.push(...(results.filter(Boolean) as string[]));
+                }
+
+                // Generate Location Snippet
+                let locationSnippet: string | null = null;
+                if (snag.plan_x != null && snag.plan_y != null) {
+                    // Find correct plan image
+                    const plan = floorPlans.find(p => {
+                        const matchesPlan = snag.plan_id ? snag.plan_id === p.planId : (p.planId === 'legacy');
+                        return matchesPlan && p.page === (snag.plan_page ?? 1);
+                    });
+
+                    if (plan) {
+                        locationSnippet = await createLocationSnippet(plan.image, snag.plan_x, snag.plan_y);
                     }
                 }
-            }
 
-            // Generate Location Snippet
-            let locationSnippet: string | null = null;
-            if (snag.plan_x != null && snag.plan_y != null) {
-                // Find correct plan image
-                const plan = floorPlans.find(p => {
-                    const matchesPlan = snag.plan_id ? snag.plan_id === p.planId : (p.planId === 'legacy');
-                    return matchesPlan && p.page === (snag.plan_page ?? 1);
-                });
+                return { snag, photos, locationSnippet };
+            }));
 
-                if (plan) {
-                    locationSnippet = await createLocationSnippet(plan.image, snag.plan_x, snag.plan_y);
+            // Render the batch to PDF sequentially (jsPDF is not thread-safe/async in this way)
+            for (const { snag, photos, locationSnippet } of batchResults) {
+                const globalIndex = snagIndexMap.get(snag.id) || 0;
+
+                // Calculate height needed
+                // Title + Details = ~60pt
+                // Photos/Snippet row height = ~imgHeight + 20pt
+                const imgWidth = (pageWidth - margin * 2 - 16) / 2;
+                const imgHeight = imgWidth * 0.6;
+
+                const hasPhotos = photos.length > 0;
+                const hasSnippet = !!locationSnippet;
+
+                // Calculate rows needed for photos + snippet
+                // We will put snippet as the first item if it exists
+                const totalImages = (hasSnippet ? 1 : 0) + photos.length;
+                const rows = Math.ceil(totalImages / 2);
+                const imagesHeight = rows * (imgHeight + 20);
+
+                ensureSpace(60 + (totalImages > 0 ? imagesHeight : 20));
+
+                doc.setFontSize(12);
+                doc.setTextColor(brandColors.black);
+                doc.text(`${globalIndex}. ${snag.title} (${snag.id.slice(0, 6)})`, margin, y);
+                y += 14;
+                doc.setFontSize(10);
+                doc.setTextColor(brandColors.grey);
+                doc.text(
+                    [
+                        `Location: ${snag.location || '—'}`,
+                        `Status: ${snag.status || 'open'}`,
+                        `Priority: ${snag.priority || 'medium'}`,
+                        `Due: ${snag.due_date || '—'}`,
+                    ],
+                    margin,
+                    y,
+                );
+                y += 48;
+                doc.setTextColor(brandColors.black);
+
+                if (totalImages > 0) {
+                    let currentImageIdx = 0;
+
+                    // Draw Snippet first if exists
+                    if (locationSnippet) {
+                        doc.addImage(locationSnippet, 'JPEG', margin, y, imgWidth, imgHeight);
+                        // Add label "Location"
+                        doc.setFontSize(8);
+                        doc.setTextColor(brandColors.grey);
+                        doc.text('Location on plan', margin + 5, y + imgHeight - 5);
+                        currentImageIdx++;
+                    }
+
+                    // Draw Photos
+                    photos.forEach((photo) => {
+                        const col = currentImageIdx % 2;
+                        const row = Math.floor(currentImageIdx / 2);
+                        // If we moved to a new row (and it's not the very first image which is at y), add height
+                        // Actually we just calculate x/y based on index
+                        // But wait, if we wrap pages inside this loop it gets complex.
+                        // We already called ensureSpace for the whole block, so we assume it fits.
+
+                        // However, if we have MANY photos, it might not fit.
+                        // For now, let's assume max 4-6 photos per snag which fits on a page.
+                        // If we need robust multi-page split for a single snag's photos, that's a bigger refactor.
+
+                        const x = margin + col * (imgWidth + 16);
+                        // If snippet was first (idx 0), it's at y.
+                        // If snippet was first, photo 1 is at idx 1 (col 1, row 0) -> same y.
+                        // Photo 2 is at idx 2 (col 0, row 1) -> y + imgHeight + 16.
+
+                        const rowY = y + Math.floor(currentImageIdx / 2) * (imgHeight + 16);
+
+                        doc.addImage(photo, 'JPEG', x, rowY, imgWidth, imgHeight);
+                        currentImageIdx++;
+                    });
+
+                    y += rows * (imgHeight + 16);
+                } else {
+                    doc.text('No photos attached.', margin, y);
+                    y += 20;
                 }
+                y += 10;
             }
 
-            // Calculate height needed
-            // Title + Details = ~60pt
-            // Photos/Snippet row height = ~imgHeight + 20pt
-            const imgWidth = (pageWidth - margin * 2 - 16) / 2;
-            const imgHeight = imgWidth * 0.6;
-
-            const hasPhotos = photos.length > 0;
-            const hasSnippet = !!locationSnippet;
-
-            // Calculate rows needed for photos + snippet
-            // We will put snippet as the first item if it exists
-            const totalImages = (hasSnippet ? 1 : 0) + photos.length;
-            const rows = Math.ceil(totalImages / 2);
-            const imagesHeight = rows * (imgHeight + 20);
-
-            ensureSpace(60 + (totalImages > 0 ? imagesHeight : 20));
-
-            doc.setFontSize(12);
-            doc.setTextColor(brandColors.black);
-            doc.text(`${i + 1}. ${snag.title} (${snag.id.slice(0, 6)})`, margin, y);
-            y += 14;
-            doc.setFontSize(10);
-            doc.setTextColor(brandColors.grey);
-            doc.text(
-                [
-                    `Location: ${snag.location || '—'}`,
-                    `Status: ${snag.status || 'open'}`,
-                    `Priority: ${snag.priority || 'medium'}`,
-                    `Due: ${snag.due_date || '—'}`,
-                ],
-                margin,
-                y,
-            );
-            y += 48;
-            doc.setTextColor(brandColors.black);
-
-            if (totalImages > 0) {
-                let currentImageIdx = 0;
-
-                // Draw Snippet first if exists
-                if (locationSnippet) {
-                    doc.addImage(locationSnippet, 'JPEG', margin, y, imgWidth, imgHeight);
-                    // Add label "Location"
-                    doc.setFontSize(8);
-                    doc.setTextColor(brandColors.grey);
-                    doc.text('Location on plan', margin + 5, y + imgHeight - 5);
-                    currentImageIdx++;
-                }
-
-                // Draw Photos
-                photos.forEach((photo) => {
-                    const col = currentImageIdx % 2;
-                    const row = Math.floor(currentImageIdx / 2);
-                    // If we moved to a new row (and it's not the very first image which is at y), add height
-                    // Actually we just calculate x/y based on index
-                    // But wait, if we wrap pages inside this loop it gets complex.
-                    // We already called ensureSpace for the whole block, so we assume it fits.
-
-                    // However, if we have MANY photos, it might not fit.
-                    // For now, let's assume max 4-6 photos per snag which fits on a page.
-                    // If we need robust multi-page split for a single snag's photos, that's a bigger refactor.
-
-                    const x = margin + col * (imgWidth + 16);
-                    // If snippet was first (idx 0), it's at y.
-                    // If snippet was first, photo 1 is at idx 1 (col 1, row 0) -> same y.
-                    // Photo 2 is at idx 2 (col 0, row 1) -> y + imgHeight + 16.
-
-                    const rowY = y + Math.floor(currentImageIdx / 2) * (imgHeight + 16);
-
-                    doc.addImage(photo, 'JPEG', x, rowY, imgWidth, imgHeight);
-                    currentImageIdx++;
-                });
-
-                y += rows * (imgHeight + 16);
-            } else {
-                doc.text('No photos attached.', margin, y);
-                y += 20;
-            }
-            y += 10;
+            // Yield to main thread to keep UI responsive
+            await yieldToMain();
         }
     }
 
