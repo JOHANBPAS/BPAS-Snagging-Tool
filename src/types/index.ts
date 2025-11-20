@@ -25,22 +25,32 @@ export interface Project {
 export type SnagPriority = 'low' | 'medium' | 'high' | 'critical';
 export type SnagStatus = 'open' | 'in_progress' | 'completed' | 'verified';
 
+export interface ProjectPlan {
+  id: string;
+  project_id: string;
+  name: string;
+  url: string;
+  created_at: string;
+  order: number;
+}
+
 export interface Snag {
   id: string;
   project_id: string;
   title: string;
-  description?: string;
-  location?: string;
-  priority?: SnagPriority;
-  status?: SnagStatus;
-  category?: string;
-  due_date?: string | null;
-  assigned_to?: string | null;
-  plan_x?: number | null;
-  plan_y?: number | null;
-  plan_page?: number | null;
-  created_by?: string;
-  created_at?: string;
+  description: string | null;
+  location: string | null;
+  priority: SnagPriority;
+  status: SnagStatus;
+  category: string | null;
+  due_date: string | null;
+  assigned_to: string | null;
+  plan_x: number | null;
+  plan_y: number | null;
+  plan_page: number | null;
+  plan_id: string | null;
+  created_by: string | null;
+  created_at: string;
 }
 
 export interface SnagPhoto {

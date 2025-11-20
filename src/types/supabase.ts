@@ -83,6 +83,41 @@ export type Database = {
                     }
                 ]
             }
+            project_plans: {
+                Row: {
+                    id: string
+                    project_id: string
+                    name: string
+                    url: string
+                    created_at: string
+                    order: number
+                }
+                Insert: {
+                    id?: string
+                    project_id: string
+                    name: string
+                    url: string
+                    created_at?: string
+                    order?: number
+                }
+                Update: {
+                    id?: string
+                    project_id?: string
+                    name?: string
+                    url?: string
+                    created_at?: string
+                    order?: number
+                }
+                Relationships: [
+                    {
+                        foreignKeyName: "project_plans_project_id_fkey"
+                        columns: ["project_id"]
+                        isOneToOne: false
+                        referencedRelation: "projects"
+                        referencedColumns: ["id"]
+                    }
+                ]
+            }
             snags: {
                 Row: {
                     id: string
@@ -98,6 +133,7 @@ export type Database = {
                     plan_x: number | null
                     plan_y: number | null
                     plan_page: number | null
+                    plan_id: string | null
                     created_by: string | null
                     created_at: string
                 }
@@ -115,6 +151,7 @@ export type Database = {
                     plan_x?: number | null
                     plan_y?: number | null
                     plan_page?: number | null
+                    plan_id?: string | null
                     created_by?: string | null
                     created_at?: string
                 }
@@ -132,6 +169,7 @@ export type Database = {
                     plan_x?: number | null
                     plan_y?: number | null
                     plan_page?: number | null
+                    plan_id?: string | null
                     created_by?: string | null
                     created_at?: string
                 }
@@ -155,6 +193,13 @@ export type Database = {
                         columns: ["assigned_to"]
                         isOneToOne: false
                         referencedRelation: "profiles"
+                        referencedColumns: ["id"]
+                    },
+                    {
+                        foreignKeyName: "snags_plan_id_fkey"
+                        columns: ["plan_id"]
+                        isOneToOne: false
+                        referencedRelation: "project_plans"
                         referencedColumns: ["id"]
                     }
                 ]

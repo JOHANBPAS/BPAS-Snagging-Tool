@@ -14,7 +14,7 @@ interface Props {
   initialSnag?: Snag | null;
   checklistFields?: ChecklistField[];
   contractors?: Profile[];
-  coords?: { x: number; y: number; page: number } | null;
+  coords?: { x: number; y: number; page: number; planId?: string } | null;
   onCoordsClear?: () => void;
 }
 
@@ -50,7 +50,7 @@ export const SnagForm: React.FC<Props> = ({
   const effectiveCoords =
     coords ??
     (initialSnag && initialSnag.plan_x != null && initialSnag.plan_y != null
-      ? { x: initialSnag.plan_x, y: initialSnag.plan_y, page: initialSnag.plan_page ?? 1 }
+      ? { x: initialSnag.plan_x, y: initialSnag.plan_y, page: initialSnag.plan_page ?? 1, planId: initialSnag.plan_id || undefined }
       : null);
 
   useEffect(() => {
@@ -141,6 +141,7 @@ export const SnagForm: React.FC<Props> = ({
           plan_x: effectiveCoords.x,
           plan_y: effectiveCoords.y,
           plan_page: effectiveCoords.page,
+          plan_id: effectiveCoords.planId,
         };
         const { data, error: updateError } = await supabase
           .from('snags')
@@ -161,6 +162,7 @@ export const SnagForm: React.FC<Props> = ({
           plan_x: effectiveCoords.x,
           plan_y: effectiveCoords.y,
           plan_page: effectiveCoords.page,
+          plan_id: effectiveCoords.planId,
         } as Database['public']['Tables']['snags']['Insert'];
 
         const { data, error: insertError } = await supabase.from('snags').insert(payload).select('*').single();

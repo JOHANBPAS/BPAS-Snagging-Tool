@@ -4,16 +4,14 @@ import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist/legacy/build/pdf';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 const workerSrc = new URL('pdfjs-dist/legacy/build/pdf.worker.min.mjs', import.meta.url).toString();
 import { Snag } from '../types';
-import { FileUpload } from './uploads/FileUpload';
 
 interface Props {
   planUrl?: string | null;
-  onPlanUploaded: (url: string) => void;
   snags: Snag[];
   onSelectLocation: (coords: { x: number; y: number; page: number }) => void;
 }
 
-export const PlanViewer: React.FC<Props> = ({ planUrl, onPlanUploaded, snags, onSelectLocation }) => {
+export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -174,7 +172,6 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, onPlanUploaded, snags, on
               +
             </button>
           </div>
-          <FileUpload label="Upload plan" bucket="plans" onUploaded={onPlanUploaded} />
         </div>
       </div>
       {isPdf && totalPages > 1 && (

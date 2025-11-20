@@ -14,8 +14,8 @@ const ProjectDetail: React.FC = () => {
   const [selected, setSelected] = useState<Snag | null>(null);
   const [editingSnag, setEditingSnag] = useState<Snag | null>(null);
   const [checklistFields, setChecklistFields] = useState<ChecklistField[]>([]);
-  const [createCoords, setCreateCoords] = useState<{ x: number; y: number; page: number } | null>(null);
-  const [editCoords, setEditCoords] = useState<{ x: number; y: number; page: number } | null>(null);
+  const [createCoords, setCreateCoords] = useState<{ x: number; y: number; page: number; planId?: string } | null>(null);
+  const [editCoords, setEditCoords] = useState<{ x: number; y: number; page: number; planId?: string } | null>(null);
 
   const fetchProject = async () => {
     if (!projectId) return;
@@ -79,11 +79,11 @@ const ProjectDetail: React.FC = () => {
         snags={snags}
         editingSnag={editingSnag}
         onProjectUpdate={setProject}
-        onSelectLocation={({ x, y, page }) => {
+        onSelectLocation={({ x, y, page, planId }) => {
           if (editingSnag) {
-            setEditCoords({ x, y, page });
+            setEditCoords({ x, y, page, planId });
           } else {
-            setCreateCoords({ x, y, page });
+            setCreateCoords({ x, y, page, planId });
           }
         }}
       />

@@ -56,35 +56,87 @@ const downscaleImage = async (dataUrl: string, maxSize = 1600, quality = 0.78): 
         img.src = dataUrl;
     });
 
-const getFloorPlans = async (project: Project): Promise<Array<{ page: number; image: string }>> => {
-    if (!project.plan_image_url) return [];
-    const url = project.plan_image_url;
-    if (url.toLowerCase().endsWith('.pdf')) {
-        const { GlobalWorkerOptions, getDocument } = await import('pdfjs-dist/legacy/build/pdf');
-        const workerSrc = new URL('pdfjs-dist/legacy/build/pdf.worker.min.mjs', import.meta.url).toString();
-        GlobalWorkerOptions.workerSrc = workerSrc;
-        const response = await fetch(url);
-        if (!response.ok) return [];
-        const buffer = await response.arrayBuffer();
-        const pdf = await getDocument({ data: buffer }).promise;
-        const pages: Array<{ page: number; image: string }> = [];
-        for (let pageIndex = 1; pageIndex <= pdf.numPages; pageIndex++) {
-            const page = await pdf.getPage(pageIndex);
-            const viewport = page.getViewport({ scale: 1.3 });
-            const canvas = document.createElement('canvas');
-            const context = canvas.getContext('2d');
-            if (!context) continue;
-            canvas.width = viewport.width;
-            canvas.height = viewport.height;
-            await page.render({ canvasContext: context, viewport }).promise;
-            const image = canvas.toDataURL('image/jpeg', 0.85);
-            pages.push({ page: pageIndex, image });
+const getFloorPlans = async (project: Project): Promise<Array<{ planId: string; name: string; page: number; image: string }>> => {
+    // 1. Try fetching from project_plans table
+    const { data: plans } = await supabase
+        .from('project_plans')
+        .select('*')
+        .eq('project_id', project.id)
+        .order('order', { ascending: true });
+
+    const results: Array<{ planId: string; name: string; page: number; image: string }> = [];
+
+    if (plans && plans.length > 0) {
+        for (const plan of plans) {
+            if (plan.url.toLowerCase().endsWith('.pdf')) {
+                const { GlobalWorkerOptions, getDocument } = await import('pdfjs-dist/legacy/build/pdf');
+                const workerSrc = new URL('pdfjs-dist/legacy/build/pdf.worker.min.mjs', import.meta.url).toString();
+                GlobalWorkerOptions.workerSrc = workerSrc;
+                try {
+                    const response = await fetch(plan.url);
+                    if (!response.ok) continue;
+                    const buffer = await response.arrayBuffer();
+                    const pdf = await getDocument({ data: buffer }).promise;
+                    for (let pageIndex = 1; pageIndex <= pdf.numPages; pageIndex++) {
+                        const page = await pdf.getPage(pageIndex);
+                        const viewport = page.getViewport({ scale: 1.3 });
+                        const canvas = document.createElement('canvas');
+                        const context = canvas.getContext('2d');
+                        if (!context) continue;
+                        canvas.width = viewport.width;
+                        canvas.height = viewport.height;
+                        await page.render({ canvasContext: context, viewport }).promise;
+                        const image = canvas.toDataURL('image/jpeg', 0.85);
+                        results.push({ planId: plan.id, name: plan.name, page: pageIndex, image });
+                    }
+                } catch (e) {
+                    console.error(`Failed to load PDF for plan ${plan.name}`, e);
+                }
+            } else {
+                const data = await toDataUrl(plan.url);
+                if (data) {
+                    results.push({ planId: plan.id, name: plan.name, page: 1, image: data });
+                }
+            }
         }
-        return pages;
+    } else if (project.plan_image_url) {
+        // Fallback to legacy single plan
+        const url = project.plan_image_url;
+        if (url.toLowerCase().endsWith('.pdf')) {
+            const { GlobalWorkerOptions, getDocument } = await import('pdfjs-dist/legacy/build/pdf');
+            const workerSrc = new URL('pdfjs-dist/legacy/build/pdf.worker.min.mjs', import.meta.url).toString();
+            GlobalWorkerOptions.workerSrc = workerSrc;
+            try {
+                const response = await fetch(url);
+                if (response.ok) {
+                    const buffer = await response.arrayBuffer();
+                    const pdf = await getDocument({ data: buffer }).promise;
+                    for (let pageIndex = 1; pageIndex <= pdf.numPages; pageIndex++) {
+                        const page = await pdf.getPage(pageIndex);
+                        const viewport = page.getViewport({ scale: 1.3 });
+                        const canvas = document.createElement('canvas');
+                        const context = canvas.getContext('2d');
+                        if (context) {
+                            canvas.width = viewport.width;
+                            canvas.height = viewport.height;
+                            await page.render({ canvasContext: context, viewport }).promise;
+                            const image = canvas.toDataURL('image/jpeg', 0.85);
+                            results.push({ planId: 'legacy', name: 'Floor Plan', page: pageIndex, image });
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to load legacy PDF plan', e);
+            }
+        } else {
+            const data = await toDataUrl(url);
+            if (data) {
+                results.push({ planId: 'legacy', name: 'Floor Plan', page: 1, image: data });
+            }
+        }
     }
-    const data = await toDataUrl(url);
-    if (!data) return [];
-    return [{ page: 1, image: data }];
+
+    return results;
 };
 
 const ensureImageDimensions = (dataUrl: string): Promise<{ width: number; height: number }> =>
@@ -172,6 +224,9 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
 
     // Sort snags by floor page then creation date for consistent numbering
     const sortedSnags = [...snags].sort((a, b) => {
+        // Group by plan ID first if available
+        if (a.plan_id !== b.plan_id) return (a.plan_id || '').localeCompare(b.plan_id || '');
+
         const pageA = a.plan_page ?? 999; // Put unplaced snags last
         const pageB = b.plan_page ?? 999;
         if (pageA !== pageB) return pageA - pageB;
@@ -208,11 +263,16 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
 
             doc.setFontSize(14);
             doc.setTextColor(brandColors.black);
-            doc.text(`Floor ${plan.page}`, margin, margin + 15);
+            doc.text(`${plan.name} - Page ${plan.page}`, margin, margin + 15);
 
             doc.addImage(scaledPlan, 'JPEG', xOffset, yOffset, finalW, finalH);
 
-            const pinsForFloor = sortedSnags.filter((snag) => (snag.plan_page ?? 1) === plan.page);
+            const pinsForFloor = sortedSnags.filter((snag) => {
+                // Match plan ID (or legacy fallback) and page
+                const matchesPlan = snag.plan_id ? snag.plan_id === plan.planId : (plan.planId === 'legacy');
+                return matchesPlan && (snag.plan_page ?? 1) === plan.page;
+            });
+
             pinsForFloor.forEach((snag) => {
                 if (snag.plan_x != null && snag.plan_y != null) {
                     const x = xOffset + finalW * snag.plan_x;
@@ -324,8 +384,13 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
 
             // Generate Location Snippet
             let locationSnippet: string | null = null;
-            if (snag.plan_page && snag.plan_x != null && snag.plan_y != null) {
-                const plan = floorPlans.find(p => p.page === snag.plan_page);
+            if (snag.plan_x != null && snag.plan_y != null) {
+                // Find correct plan image
+                const plan = floorPlans.find(p => {
+                    const matchesPlan = snag.plan_id ? snag.plan_id === p.planId : (p.planId === 'legacy');
+                    return matchesPlan && p.page === (snag.plan_page ?? 1);
+                });
+
                 if (plan) {
                     locationSnippet = await createLocationSnippet(plan.image, snag.plan_x, snag.plan_y);
                 }

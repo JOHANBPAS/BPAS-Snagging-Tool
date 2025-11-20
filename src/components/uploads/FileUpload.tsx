@@ -5,9 +5,10 @@ interface Props {
   label?: string;
   bucket: string;
   onUploaded: (publicUrl: string) => void;
+  className?: string;
 }
 
-export const FileUpload: React.FC<Props> = ({ label = 'Upload file', bucket, onUploaded }) => {
+export const FileUpload: React.FC<Props> = ({ label = 'Upload file', bucket, onUploaded, className }) => {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,7 +34,7 @@ export const FileUpload: React.FC<Props> = ({ label = 'Upload file', bucket, onU
   };
 
   return (
-    <div className="space-y-1">
+    <div className={`space-y-1 ${className || ''}`}>
       <label className="flex cursor-pointer items-center justify-between rounded-lg border border-dashed border-bpas-yellow/60 bg-bpas-yellow/10 px-3 py-2 text-sm font-semibold text-bpas-black font-syne">
         <span>{uploading ? 'Uploading…' : label}</span>
         <input type="file" className="hidden" onChange={handleChange} accept="image/*,application/pdf" />

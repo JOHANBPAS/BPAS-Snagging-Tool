@@ -12,8 +12,8 @@ interface Props {
     checklistFields: ChecklistField[];
     selected: Snag | null;
     editingSnag: Snag | null;
-    createCoords: { x: number; y: number; page: number } | null;
-    editCoords: { x: number; y: number; page: number } | null;
+    createCoords: { x: number; y: number; page: number; planId?: string } | null;
+    editCoords: { x: number; y: number; page: number; planId?: string } | null;
     onSelect: (snag: Snag | null) => void;
     onEdit: (snag: Snag | null) => void;
     onCoordsClear: () => void;
