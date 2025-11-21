@@ -5,11 +5,14 @@ import { StatsCards } from '../components/StatsCards';
 import { supabase } from '../lib/supabaseClient';
 import { DashboardStats, Project, Snag } from '../types';
 
+import { OfflineSyncModal } from '../components/OfflineSyncModal';
+
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [projects, setProjects] = useState<Project[]>([]);
   const [snags, setSnags] = useState<Snag[]>([]);
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -57,7 +60,20 @@ const Dashboard: React.FC = () => {
         <p className="max-w-2xl font-raleway text-white/80">
           Track snags across every project, spot at-risk packages, and export reports for handover.
         </p>
-        <div className="mt-3 h-1 w-14 rounded-full bg-bpas-yellow" />
+        <div className="mt-4 flex items-center justify-between">
+          <div className="h-1 w-14 rounded-full bg-bpas-yellow" />
+          <button
+            onClick={() => setIsSyncModalOpen(true)}
+            className="flex items-center gap-2 rounded-lg bg-white/10 px-4 py-2 text-sm font-medium text-white backdrop-blur-sm hover:bg-white/20 transition"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            Download for Offline
+          </button>
+        </div>
       </div>
 
       {stats && (
@@ -118,7 +134,14 @@ const Dashboard: React.FC = () => {
           </ul>
         </div>
       </div>
-    </div>
+
+
+      <OfflineSyncModal
+        isOpen={isSyncModalOpen}
+        onClose={() => setIsSyncModalOpen(false)}
+        projects={projects}
+      />
+    </div >
   );
 };
 
