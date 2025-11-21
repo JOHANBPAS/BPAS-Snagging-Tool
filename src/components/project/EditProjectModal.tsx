@@ -132,75 +132,81 @@ export const EditProjectModal: React.FC<Props> = ({ project, onClose, onUpdate }
                         </div>
                     </div>
 
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700">Status</label>
+                        <select
+                            value={form.status}
+                            onChange={(e) => handleChange('status', e.target.value)}
+                            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-bpas-yellow focus:outline-none"
                         >
-                    <option value="active">Active</option>
-                    <option value="completed">Completed</option>
-                    <option value="archived">Archived</option>
-                </select>
-            </div>
+                            <option value="active">Active</option>
+                            <option value="completed">Completed</option>
+                            <option value="archived">Archived</option>
+                        </select>
+                    </div>
 
-            <div>
-                <label className="block text-sm font-medium text-slate-700">Project Number</label>
-                <input
-                    type="text"
-                    value={form.project_number}
-                    onChange={(e) => handleChange('project_number', e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-bpas-yellow focus:outline-none"
-                />
-            </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700">Project Number</label>
+                        <input
+                            type="text"
+                            value={form.project_number}
+                            onChange={(e) => handleChange('project_number', e.target.value)}
+                            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-bpas-yellow focus:outline-none"
+                        />
+                    </div>
 
-            <div>
-                <label className="block text-sm font-medium text-slate-700">Inspection Type</label>
-                <input
-                    type="text"
-                    value={form.inspection_type}
-                    onChange={(e) => handleChange('inspection_type', e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-bpas-yellow focus:outline-none"
-                    placeholder="e.g. Practical Completion"
-                />
-            </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700">Inspection Type</label>
+                        <input
+                            type="text"
+                            value={form.inspection_type}
+                            onChange={(e) => handleChange('inspection_type', e.target.value)}
+                            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-bpas-yellow focus:outline-none"
+                            placeholder="e.g. Practical Completion"
+                        />
+                    </div>
 
-            <div>
-                <label className="block text-sm font-medium text-slate-700">Inspection Scope</label>
-                <select
-                    value={form.inspection_scope}
-                    onChange={(e) => handleChange('inspection_scope', e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-bpas-yellow focus:outline-none"
-                >
-                    <option value="">Select Scope</option>
-                    <option value="Internal">Internal</option>
-                    <option value="External">External</option>
-                    <option value="Both">Both</option>
-                </select>
-            </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700">Inspection Scope</label>
+                        <select
+                            value={form.inspection_scope}
+                            onChange={(e) => handleChange('inspection_scope', e.target.value)}
+                            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-bpas-yellow focus:outline-none"
+                        >
+                            <option value="">Select Scope</option>
+                            <option value="Internal">Internal</option>
+                            <option value="External">External</option>
+                            <option value="Both">Both</option>
+                        </select>
+                    </div>
 
-            <div>
-                <label className="block text-sm font-medium text-slate-700">Description / Scope</label>
-                <textarea
-                    value={form.inspection_description}
-                    onChange={(e) => handleChange('inspection_description', e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-bpas-yellow focus:outline-none"
-                    rows={3}
-                />
-            </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700">Description / Scope</label>
+                        <textarea
+                            value={form.inspection_description}
+                            onChange={(e) => handleChange('inspection_description', e.target.value)}
+                            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-bpas-yellow focus:outline-none"
+                            rows={3}
+                        />
+                    </div>
 
-            <div className="mt-6 flex justify-end gap-3">
-                <button
-                    type="button"
-                    onClick={onClose}
-                    className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
-                >
-                    Cancel
-                </button>
-                <button
-                    type="submit"
-                    disabled={loading}
-                    className="rounded-lg bg-bpas-black px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-                >
-                    {loading ? 'Saving...' : 'Save Changes'}
-                </button>
-            </div>
-        </form>
+                    <div className="mt-6 flex justify-end gap-3">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="rounded-lg bg-bpas-black px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                        >
+                            {loading ? 'Saving...' : 'Save Changes'}
+                        </button>
+                    </div>
+                </form>
             </div >
         </div >
     );
