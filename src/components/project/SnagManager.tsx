@@ -134,8 +134,8 @@ export const SnagManager: React.FC<Props> = ({
             )}
 
             {(editingSnag || createCoords) && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-8">
-                    <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+                <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 sm:px-4 sm:py-8">
+                    <div className="w-full max-w-2xl rounded-t-2xl sm:rounded-2xl bg-white p-6 shadow-2xl max-h-[85vh] overflow-y-auto">
                         <SnagForm
                             projectId={project.id}
                             initialSnag={editingSnag || undefined}

@@ -53,7 +53,31 @@ export const ProjectHeader: React.FC<Props> = ({ project, snags, action, onEdit 
                                 {project.status}
                             </span>
                         </div>
+                        {project.project_number && (
+                            <div className="flex items-center gap-1">
+                                <span className="font-medium text-slate-700">Project #:</span>
+                                {project.project_number}
+                            </div>
+                        )}
+                        {project.inspection_type && (
+                            <div className="flex items-center gap-1">
+                                <span className="font-medium text-slate-700">Type:</span>
+                                {project.inspection_type}
+                            </div>
+                        )}
+                        {project.inspection_scope && (
+                            <div className="flex items-center gap-1">
+                                <span className="font-medium text-slate-700">Scope:</span>
+                                {project.inspection_scope}
+                            </div>
+                        )}
                     </div>
+                    {project.inspection_description && (
+                        <p className="mt-2 text-sm text-slate-600 max-w-2xl">
+                            <span className="font-medium text-slate-700">Description: </span>
+                            {project.inspection_description}
+                        </p>
+                    )}
                 </div>
                 <div className="flex items-center gap-3">
                     {action}

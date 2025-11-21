@@ -84,6 +84,10 @@ export const ImageAnnotator: React.FC<Props> = ({ imageSrc, onSave, onCancel }) 
     const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
         if (!context || !canvasRef.current) return;
         setIsDrawing(true);
+
+        // Save state before starting a new drawing action
+        saveHistory();
+
         const coords = getCoords(e);
         setStartPos(coords);
 
@@ -145,6 +149,36 @@ export const ImageAnnotator: React.FC<Props> = ({ imageSrc, onSave, onCancel }) 
         setIsDrawing(false);
         setStartPos(null);
         setSnapshot(null);
+    };
+
+    const [history, setHistory] = useState<ImageData[]>([]);
+
+    const saveHistory = () => {
+        if (!context || !canvasRef.current) return;
+        const imageData = context.getImageData(0, 0, canvasRef.current.width, canvasRef.current.height);
+        setHistory((prev) => [...prev, imageData]);
+    };
+
+    const undo = () => {
+        if (history.length === 0 || !context || !canvasRef.current) return;
+        const previousState = history[history.length - 1];
+        const newHistory = history.slice(0, -1);
+        setHistory(newHistory);
+        context.putImageData(previousState, 0, 0);
+    };
+
+    const clear = () => {
+        if (!context || !canvasRef.current) return;
+        // Save current state before clearing so we can undo the clear
+        saveHistory();
+
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.src = imageSrc;
+        img.onload = () => {
+            if (!context || !canvasRef.current) return;
+            context.drawImage(img, 0, 0, canvasRef.current.width, canvasRef.current.height);
+        };
     };
 
     const handleSave = () => {
@@ -243,6 +277,26 @@ export const ImageAnnotator: React.FC<Props> = ({ imageSrc, onSave, onCancel }) 
                         className={`flex h-8 w-8 items-center justify-center rounded-full ${lineWidth === 8 ? 'bg-white/20' : ''}`}
                     >
                         <div className="h-3 w-3 rounded-full bg-white" />
+                    </button>
+                </div>
+
+                <div className="mx-2 h-8 w-px bg-white/20" />
+
+                <div className="flex gap-2 items-center">
+                    <button
+                        onClick={undo}
+                        disabled={history.length === 0}
+                        className="p-2 rounded-lg text-white/60 hover:text-white disabled:opacity-30 disabled:hover:text-white/60"
+                        title="Undo"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path></svg>
+                    </button>
+                    <button
+                        onClick={clear}
+                        className="p-2 rounded-lg text-white/60 hover:text-rose-400"
+                        title="Clear All"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                     </button>
                 </div>
             </div>

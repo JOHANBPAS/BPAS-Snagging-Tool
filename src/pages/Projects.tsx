@@ -58,6 +58,10 @@ const Projects: React.FC = () => {
       end_date: form.end_date,
       status: 'active',
       created_by: user.id,
+      project_number: form.project_number,
+      inspection_type: form.inspection_type,
+      inspection_scope: form.inspection_scope,
+      inspection_description: form.inspection_description,
     } as Database['public']['Tables']['projects']['Insert']);
     if (insertError) setError(insertError.message);
     await fetchProjects();
@@ -109,6 +113,35 @@ const Projects: React.FC = () => {
                 className="w-full rounded-lg border border-bpas-grey/30 bg-bpas-light px-3 py-2 text-sm focus:border-bpas-yellow focus:outline-none"
               />
             </div>
+            <input
+              value={form.project_number || ''}
+              onChange={(e) => setForm((prev) => ({ ...prev, project_number: e.target.value }))}
+              placeholder="Project Number"
+              className="w-full rounded-lg border border-bpas-grey/30 bg-bpas-light px-3 py-2 text-sm focus:border-bpas-yellow focus:outline-none"
+            />
+            <input
+              value={form.inspection_type || ''}
+              onChange={(e) => setForm((prev) => ({ ...prev, inspection_type: e.target.value }))}
+              placeholder="Inspection Type (e.g. Practical Completion)"
+              className="w-full rounded-lg border border-bpas-grey/30 bg-bpas-light px-3 py-2 text-sm focus:border-bpas-yellow focus:outline-none"
+            />
+            <select
+              value={form.inspection_scope || ''}
+              onChange={(e) => setForm((prev) => ({ ...prev, inspection_scope: e.target.value }))}
+              className="w-full rounded-lg border border-bpas-grey/30 bg-bpas-light px-3 py-2 text-sm focus:border-bpas-yellow focus:outline-none"
+            >
+              <option value="">Select Scope</option>
+              <option value="Internal">Internal</option>
+              <option value="External">External</option>
+              <option value="Both">Both</option>
+            </select>
+            <textarea
+              value={form.inspection_description || ''}
+              onChange={(e) => setForm((prev) => ({ ...prev, inspection_description: e.target.value }))}
+              placeholder="Inspection Description / Scope"
+              className="w-full rounded-lg border border-bpas-grey/30 bg-bpas-light px-3 py-2 text-sm focus:border-bpas-yellow focus:outline-none sm:col-span-2 md:col-span-3"
+              rows={2}
+            />
             <button
               type="submit"
               disabled={loading}

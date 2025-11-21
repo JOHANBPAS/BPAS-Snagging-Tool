@@ -54,8 +54,8 @@ export const SnagDetailModal: React.FC<Props> = ({ snag, isOpen, onClose, onUpda
   if (!isOpen || !snag) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-      <div className="flex h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 sm:p-4 backdrop-blur-sm">
+      <div className="flex h-[90vh] w-full sm:max-w-4xl flex-col overflow-hidden rounded-t-xl sm:rounded-xl bg-white shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
           <div>

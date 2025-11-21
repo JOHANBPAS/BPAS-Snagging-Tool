@@ -103,7 +103,7 @@ export const ProjectDetail: React.FC = () => {
         onEdit={() => setIsEditingProject(true)}
       />
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="flex flex-col gap-4 lg:grid lg:grid-cols-3">
         <div className="lg:col-span-3 space-y-4">
           {/* Content removed as it's now in header */}
         </div>

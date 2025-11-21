@@ -263,8 +263,32 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
     doc.setTextColor(brandColors.grey);
     doc.text(`Project: ${project.name}`, margin, contentStartY + 18);
     doc.text(`Client: ${project.client_name || 'N/A'}`, margin, contentStartY + 32);
-    doc.text(`Generated: ${new Date().toLocaleString()}`, margin, contentStartY + 46);
-    doc.text(`Date of Inspection: ${new Date().toLocaleDateString()}`, margin, contentStartY + 60);
+
+    let currentY = contentStartY + 46;
+    if (project.project_number) {
+        doc.text(`Project Number: ${project.project_number}`, margin, currentY);
+        currentY += 14;
+    }
+    if (project.inspection_type) {
+        doc.text(`Inspection Type: ${project.inspection_type}`, margin, currentY);
+        currentY += 14;
+    }
+    if (project.inspection_scope) {
+        doc.text(`Scope: ${project.inspection_scope}`, margin, currentY);
+        currentY += 14;
+    }
+
+    doc.text(`Generated: ${new Date().toLocaleString()}`, margin, currentY);
+    currentY += 14;
+    doc.text(`Date of Inspection: ${new Date().toLocaleDateString()}`, margin, currentY);
+    currentY += 20;
+
+    if (project.inspection_description) {
+        doc.setFontSize(10);
+        const splitDescription = doc.splitTextToSize(`Description: ${project.inspection_description}`, pageWidth - margin * 2);
+        doc.text(splitDescription, margin, currentY);
+        currentY += splitDescription.length * 12 + 10;
+    }
 
     onProgress?.('Processing floor plans...');
     await yieldToMain();
@@ -601,6 +625,22 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
             text: `Client: ${project.client_name || 'N/A'}`,
             spacing: { after: 100 },
         }),
+        ...(project.project_number ? [new Paragraph({
+            text: `Project Number: ${project.project_number}`,
+            spacing: { after: 100 },
+        })] : []),
+        ...(project.inspection_type ? [new Paragraph({
+            text: `Inspection Type: ${project.inspection_type}`,
+            spacing: { after: 100 },
+        })] : []),
+        ...(project.inspection_scope ? [new Paragraph({
+            text: `Scope: ${project.inspection_scope}`,
+            spacing: { after: 100 },
+        })] : []),
+        ...(project.inspection_description ? [new Paragraph({
+            text: `Description: ${project.inspection_description}`,
+            spacing: { after: 200 },
+        })] : []),
         new Paragraph({
             text: `Generated: ${new Date().toLocaleString()}`,
             spacing: { after: 100 },

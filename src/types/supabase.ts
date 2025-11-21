@@ -46,6 +46,10 @@ export type Database = {
                     created_by: string | null
                     checklist_template_id: string | null
                     created_at: string
+                    inspection_type: string | null
+                    inspection_description: string | null
+                    inspection_scope: string | null
+                    project_number: string | null
                 }
                 Insert: {
                     id?: string
@@ -59,6 +63,10 @@ export type Database = {
                     created_by?: string | null
                     checklist_template_id?: string | null
                     created_at?: string
+                    inspection_type?: string | null
+                    inspection_description?: string | null
+                    inspection_scope?: string | null
+                    project_number?: string | null
                 }
                 Update: {
                     id?: string
@@ -72,6 +80,10 @@ export type Database = {
                     created_by?: string | null
                     checklist_template_id?: string | null
                     created_at?: string
+                    inspection_type?: string | null
+                    inspection_description?: string | null
+                    inspection_scope?: string | null
+                    project_number?: string | null
                 }
                 Relationships: [
                     {
