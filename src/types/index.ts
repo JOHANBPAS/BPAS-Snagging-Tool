@@ -73,9 +73,10 @@ export interface SnagComment {
 
 export interface ActivityLog {
   id: string;
-  snag_id: string;
+  entity_type: string;
+  entity_id: string;
   message: string;
-  created_at?: string;
+  created_at: string;
 }
 
 export interface ChecklistTemplate {

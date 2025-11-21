@@ -1,24 +1,29 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { ReportPreview } from '../components/ReportPreview';
 import { supabase } from '../lib/supabaseClient';
 import { ChecklistField, Project, Snag } from '../types';
 import { ProjectHeader } from '../components/project/ProjectHeader';
 import { PlanManager } from '../components/project/PlanManager';
 import { SnagManager } from '../components/project/SnagManager';
+import { EditProjectModal } from '../components/project/EditProjectModal';
+import { useAuth } from '../hooks/useAuth';
 
-const ProjectDetail: React.FC = () => {
-  const { projectId } = useParams();
+export const ProjectDetail: React.FC = () => {
+  const { projectId } = useParams<{ projectId: string }>();
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [project, setProject] = useState<Project | null>(null);
   const [snags, setSnags] = useState<Snag[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Snag | null>(null);
   const [editingSnag, setEditingSnag] = useState<Snag | null>(null);
+  const [isEditingProject, setIsEditingProject] = useState(false);
   const [checklistFields, setChecklistFields] = useState<ChecklistField[]>([]);
   const [createCoords, setCreateCoords] = useState<{ x: number; y: number; page: number; planId?: string } | null>(null);
   const [editCoords, setEditCoords] = useState<{ x: number; y: number; page: number; planId?: string } | null>(null);
 
   const fetchProject = async () => {
-    if (!projectId) return;
     const { data } = await supabase.from('projects').select('*').eq('id', projectId).single();
     setProject((data as Project) || null);
   };
@@ -76,8 +81,15 @@ const ProjectDetail: React.FC = () => {
     <div className="space-y-4">
       <ProjectHeader
         project={project}
-        completedPct={summary.completedPct}
-        action={<ReportPreview project={project} snags={snags} />}
+        snags={snags}
+        action={
+          <button
+            onClick={() => navigate('/projects')}
+            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+          >
+            Back to Projects
+          </button>
+        }
         onEdit={() => setIsEditingProject(true)}
       />
 

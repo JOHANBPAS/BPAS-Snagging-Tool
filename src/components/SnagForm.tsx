@@ -8,6 +8,8 @@ import { resizeImage } from '../lib/imageUtils';
 import { useOfflineStatus } from '../hooks/useOfflineStatus';
 import { queueMutation } from '../services/offlineStorage';
 
+import { ImageAnnotator } from './ImageAnnotator';
+
 interface Props {
   projectId: string;
   onCreated?: (snag: Snag) => void;
@@ -31,24 +33,29 @@ export const SnagForm: React.FC<Props> = ({
   onCreated,
   onUpdated,
   onCancel,
-  initialSnag = null,
-  checklistFields = [],
-  contractors = [],
-  coords = null,
-  existingLocations = [],
-  onCoordsClear,
+  initialSnag,
+  checklistFields,
+  contractors,
+  coords,
+  existingLocations,
+  onCoordsClear
 }) => {
   const { user } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [customValues, setCustomValues] = useState<Record<string, any>>({});
   const [form, setForm] = useState<Partial<Snag>>({
     title: '',
     description: '',
     priority: 'medium',
     status: 'open',
+    location: '',
+    category: '',
+    due_date: '',
+    assigned_to: ''
   });
-  const [customValues, setCustomValues] = useState<Record<string, string | number | boolean>>({});
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [pendingPhotos, setPendingPhotos] = useState<PendingPhoto[]>([]);
+  const [pendingPhotos, setPendingPhotos] = useState<{ file: File; preview: string }[]>([]);
+  const [annotatingPhoto, setAnnotatingPhoto] = useState<{ index: number; src: string } | null>(null);
   const isEditing = Boolean(initialSnag);
 
   const effectiveCoords =
@@ -410,12 +417,6 @@ export const SnagForm: React.FC<Props> = ({
           </div>
         </div>
       )}
-      import {ImageAnnotator} from './ImageAnnotator';
-
-      // ... (inside component)
-      const [annotatingPhoto, setAnnotatingPhoto] = useState<{ index: number; src: string } | null>(null);
-
-      // ... (render)
       {annotatingPhoto && (
         <ImageAnnotator
           imageSrc={annotatingPhoto.src}

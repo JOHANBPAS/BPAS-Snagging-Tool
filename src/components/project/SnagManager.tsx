@@ -123,7 +123,9 @@ export const SnagManager: React.FC<Props> = ({
             {selected && (
                 <SnagDetailModal
                     snag={selected}
+                    isOpen={true}
                     onClose={() => onSelect(null)}
+                    onUpdate={onSnagChange}
                     onDelete={confirmDelete}
                     onEdit={(snagToEdit) => onEdit(snagToEdit)}
                 />

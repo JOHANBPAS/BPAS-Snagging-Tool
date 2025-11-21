@@ -1,20 +1,13 @@
 import { supabase } from '../lib/supabaseClient';
 
-export const preloadProjectPlans = async (projectId: string, onProgress?: (count: number, total: number) => void) => {
+export const preloadProjectPlans = async (plans: { url: string }[], onProgress?: (count: number, total: number) => void) => {
     try {
-        // 1. Fetch all plans for the project
-        const { data: plans, error } = await supabase
-            .from('project_plans')
-            .select('url')
-            .eq('project_id', projectId);
-
-        if (error) throw error;
         if (!plans || plans.length === 0) return;
 
         const total = plans.length;
         let completed = 0;
 
-        // 2. Fetch each plan to trigger Service Worker caching
+        // Fetch each plan to trigger Service Worker caching
         // We process them sequentially or with limited concurrency to avoid overwhelming the network
         for (const plan of plans) {
             try {
