@@ -20,6 +20,7 @@ interface Props {
     onEdit: (snag: Snag | null) => void;
     onCoordsClear: () => void;
     onSnagChange: () => void;
+    contractors?: any[];
 }
 
 export const SnagManager: React.FC<Props> = ({
@@ -34,6 +35,7 @@ export const SnagManager: React.FC<Props> = ({
     onEdit,
     onCoordsClear,
     onSnagChange,
+    contractors = [],
 }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -139,6 +141,7 @@ export const SnagManager: React.FC<Props> = ({
                             initialSnag={editingSnag || undefined}
                             coords={editingSnag ? editCoords : createCoords}
                             checklistFields={checklistFields}
+                            contractors={contractors}
                             existingLocations={Array.from(new Set(snags.map(s => s.location).filter(Boolean))) as string[]}
                             onCoordsClear={onCoordsClear}
                             onCreated={() => {

@@ -563,3 +563,255 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
 
     return { pdf, fileName };
 };
+
+export const generateWordReport = async ({ project, snags, onProgress }: ReportGenerationOptions) => {
+    onProgress?.('Initializing Word report...');
+    await yieldToMain();
+
+    const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, ImageRun, Header, Footer, AlignmentType, PageBreak } = await import('docx');
+
+    // Sort snags (same logic as PDF)
+    const sortedSnags = [...snags].sort((a, b) => {
+        if (a.plan_id !== b.plan_id) return (a.plan_id || '').localeCompare(b.plan_id || '');
+        const pageA = a.plan_page ?? 999;
+        const pageB = b.plan_page ?? 999;
+        if (pageA !== pageB) return pageA - pageB;
+        return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
+    });
+
+    const snagIndexMap = new Map<string, number>();
+    snags.forEach((s, i) => snagIndexMap.set(s.id, i + 1));
+
+    const children: any[] = [];
+
+    // Title Page
+    children.push(
+        new Paragraph({
+            text: "BPAS Snagging Report",
+            heading: "Title",
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 400 },
+        }),
+        new Paragraph({
+            text: `Project: ${project.name}`,
+            heading: "Heading2",
+            spacing: { after: 200 },
+        }),
+        new Paragraph({
+            text: `Client: ${project.client_name || 'N/A'}`,
+            spacing: { after: 100 },
+        }),
+        new Paragraph({
+            text: `Generated: ${new Date().toLocaleString()}`,
+            spacing: { after: 100 },
+        }),
+        new Paragraph({
+            text: `Date of Inspection: ${new Date().toLocaleDateString()}`,
+            spacing: { after: 400 },
+        })
+    );
+
+    // Floor Plans
+    onProgress?.('Processing floor plans...');
+    await yieldToMain();
+    const floorPlans = await getFloorPlans(project, sortedSnags);
+
+    if (floorPlans.length > 0) {
+        children.push(new Paragraph({ text: "Floor Plans", heading: "Heading1", pageBreakBefore: true }));
+
+        for (const plan of floorPlans) {
+            // Draw pins on the plan image using a canvas (similar to PDF)
+            // We reuse the logic but return a blob/buffer for docx
+            const img = new Image();
+            img.src = plan.image;
+            await new Promise((resolve) => (img.onload = resolve));
+
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                ctx.drawImage(img, 0, 0);
+
+                // Draw pins
+                const pinsForFloor = sortedSnags.filter((snag) => {
+                    const matchesPlan = snag.plan_id ? snag.plan_id === plan.planId : (plan.planId === 'legacy');
+                    return matchesPlan && (snag.plan_page ?? 1) === plan.page;
+                });
+
+                pinsForFloor.forEach((snag) => {
+                    if (snag.plan_x != null && snag.plan_y != null) {
+                        const x = img.width * snag.plan_x;
+                        const y = img.height * snag.plan_y;
+
+                        ctx.beginPath();
+                        ctx.arc(x, y, Math.max(img.width * 0.01, 10), 0, 2 * Math.PI);
+                        ctx.fillStyle = 'rgba(235, 64, 52, 0.8)';
+                        ctx.fill();
+                        ctx.strokeStyle = 'white';
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+
+                        const globalIndex = snagIndexMap.get(snag.id) || 0;
+                        ctx.fillStyle = 'white';
+                        ctx.font = `bold ${Math.max(img.width * 0.012, 12)}px Arial`;
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(String(globalIndex), x, y);
+                    }
+                });
+
+                const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.8));
+                if (blob) {
+                    const buffer = await blob.arrayBuffer();
+                    children.push(
+                        new Paragraph({
+                            text: `${plan.name} - Page ${plan.page}`,
+                            heading: "Heading3",
+                            spacing: { before: 200, after: 100 },
+                        }),
+                        new Paragraph({
+                            children: [
+                                new ImageRun({
+                                    data: buffer,
+                                    transformation: {
+                                        width: 600,
+                                        height: 600 * (img.height / img.width),
+                                    },
+                                }),
+                            ],
+                        })
+                    );
+                }
+            }
+        }
+    }
+
+    // Snag List Table
+    onProgress?.('Generating snag list...');
+    await yieldToMain();
+    children.push(new Paragraph({ text: "Snag List", heading: "Heading1", pageBreakBefore: true }));
+
+    const tableRows = [
+        new TableRow({
+            children: ['#', 'Title', 'Location', 'Status', 'Priority', 'Due'].map(text =>
+                new TableCell({
+                    children: [new Paragraph({ text, style: "Strong" })],
+                    shading: { fill: "EBA000" },
+                })
+            ),
+            tableHeader: true,
+        }),
+        ...sortedSnags.map(snag =>
+            new TableRow({
+                children: [
+                    String(snagIndexMap.get(snag.id) || '-'),
+                    snag.title,
+                    snag.location || '—',
+                    snag.status,
+                    snag.priority,
+                    snag.due_date || '—'
+                ].map(text => new TableCell({ children: [new Paragraph(text)] }))
+            })
+        )
+    ];
+
+    children.push(new Table({
+        rows: tableRows,
+        width: { size: 100, type: WidthType.PERCENTAGE },
+    }));
+
+    // Snag Photos
+    onProgress?.('Processing photos...');
+    await yieldToMain();
+    children.push(new Paragraph({ text: "Snag Photos", heading: "Heading1", pageBreakBefore: true }));
+
+    const BATCH_SIZE = 5;
+    for (let i = 0; i < sortedSnags.length; i += BATCH_SIZE) {
+        const batch = sortedSnags.slice(i, i + BATCH_SIZE);
+        const batchResults = await Promise.all(batch.map(async (snag) => {
+            onProgress?.(`Fetching photos for snag ${snagIndexMap.get(snag.id)}...`);
+
+            const { data: photoRows } = await supabase.from('snag_photos').select('photo_url').eq('snag_id', snag.id);
+            const photos: ArrayBuffer[] = [];
+
+            if (photoRows && photoRows.length > 0) {
+                const photoPromises = photoRows.map(async (row) => {
+                    const res = await fetch(row.photo_url);
+                    if (res.ok) return await res.arrayBuffer();
+                    return null;
+                });
+                const results = await Promise.all(photoPromises);
+                photos.push(...(results.filter(Boolean) as ArrayBuffer[]));
+            }
+
+            let locationSnippet: ArrayBuffer | null = null;
+            if (snag.plan_x != null && snag.plan_y != null) {
+                const plan = floorPlans.find(p => {
+                    const matchesPlan = snag.plan_id ? snag.plan_id === p.planId : (p.planId === 'legacy');
+                    return matchesPlan && p.page === (snag.plan_page ?? 1);
+                });
+
+                if (plan) {
+                    const snippetDataUrl = await createLocationSnippet(plan.image, snag.plan_x, snag.plan_y);
+                    if (snippetDataUrl) {
+                        const res = await fetch(snippetDataUrl);
+                        if (res.ok) locationSnippet = await res.arrayBuffer();
+                    }
+                }
+            }
+
+            return { snag, photos, locationSnippet };
+        }));
+
+        for (const { snag, photos, locationSnippet } of batchResults) {
+            const globalIndex = snagIndexMap.get(snag.id) || 0;
+
+            children.push(
+                new Paragraph({
+                    text: `${globalIndex}. ${snag.title}`,
+                    heading: "Heading3",
+                    spacing: { before: 400, after: 100 },
+                }),
+                new Paragraph({
+                    text: `Location: ${snag.location || '—'} | Status: ${snag.status} | Priority: ${snag.priority}`,
+                    spacing: { after: 200 },
+                })
+            );
+
+            const images: ImageRun[] = [];
+            if (locationSnippet) {
+                images.push(new ImageRun({
+                    data: locationSnippet,
+                    transformation: { width: 200, height: 200 },
+                }));
+            }
+            photos.forEach(photo => {
+                images.push(new ImageRun({
+                    data: photo,
+                    transformation: { width: 200, height: 200 },
+                }));
+            });
+
+            if (images.length > 0) {
+                // Add images in a paragraph (simple flow)
+                children.push(new Paragraph({ children: images }));
+            } else {
+                children.push(new Paragraph({ text: "No photos attached.", style: "Italic" }));
+            }
+        }
+        await yieldToMain();
+    }
+
+    onProgress?.('Finalizing Word document...');
+    const doc = new Document({
+        sections: [{
+            properties: {},
+            children: children,
+        }],
+    });
+
+    const blob = await Packer.toBlob(doc);
+    const fileName = formatFileName(project).replace('.pdf', '.docx');
+    return { blob, fileName };
+};

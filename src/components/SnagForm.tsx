@@ -373,7 +373,7 @@ export const SnagForm: React.FC<Props> = ({
             className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-brand focus:bg-white focus:outline-none"
           >
             <option value="">Unassigned</option>
-            {contractors.map((user) => (
+            {contractors?.map((user) => (
               <option key={user.id} value={user.id}>
                 {user.full_name}
               </option>
@@ -381,7 +381,7 @@ export const SnagForm: React.FC<Props> = ({
           </select>
         </label>
       </div>
-      {checklistFields.length > 0 && (
+      {checklistFields && checklistFields.length > 0 && (
         <div className="rounded-lg border border-dashed border-brand/30 bg-brand/5 p-3">
           <p className="text-sm font-semibold text-slate-700">Template fields</p>
           <div className="mt-2 grid gap-2 sm:grid-cols-2">

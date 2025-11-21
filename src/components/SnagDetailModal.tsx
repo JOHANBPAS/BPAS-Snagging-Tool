@@ -260,12 +260,24 @@ export const SnagDetailModal: React.FC<Props> = ({ snag, isOpen, onClose, onUpda
               const { data: urlData } = bucket.getPublicUrl(path);
               const publicUrl = urlData.publicUrl;
 
+              // Delete the original photo record to avoid duplicates in report
+              // We find the photo by URL since we only have the URL in state for some cases, 
+              // but ideally we should match by ID. For now, URL matching is safe enough if unique.
+              const originalPhoto = photos.find(p => p.photo_url === annotatingUrl);
+              if (originalPhoto && originalPhoto.id) {
+                await supabase.from('snag_photos').delete().eq('id', originalPhoto.id);
+              }
+
               await supabase.from('snag_photos').insert({
                 snag_id: snag.id,
                 photo_url: publicUrl
               });
 
-              setPhotos(prev => [...prev, { id: publicUrl, snag_id: snag.id, photo_url: publicUrl }]);
+              // Update local state: remove original, add new
+              setPhotos(prev => [
+                ...prev.filter(p => p.photo_url !== annotatingUrl),
+                { id: publicUrl, snag_id: snag.id, photo_url: publicUrl } // Temp ID
+              ]);
             }
             setAnnotatingUrl(null);
           }}

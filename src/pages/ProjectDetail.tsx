@@ -49,6 +49,8 @@ export const ProjectDetail: React.FC = () => {
     fetchSnags();
   }, [projectId]);
 
+  const [contractors, setContractors] = useState<any[]>([]);
+
   useEffect(() => {
     const fetchTemplate = async () => {
       if (!project?.checklist_template_id) return;
@@ -60,6 +62,14 @@ export const ProjectDetail: React.FC = () => {
     };
     fetchTemplate();
   }, [project?.checklist_template_id]);
+
+  useEffect(() => {
+    const fetchProfiles = async () => {
+      const { data } = await supabase.from('profiles').select('*');
+      setContractors(data || []);
+    };
+    fetchProfiles();
+  }, []);
 
   const summary = useMemo(() => {
     const total = snags.length;
@@ -128,6 +138,7 @@ export const ProjectDetail: React.FC = () => {
           setCreateCoords(null);
         }}
         onSnagChange={fetchSnags}
+        contractors={contractors}
       />
 
       {isEditingProject && (

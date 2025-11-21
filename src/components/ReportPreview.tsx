@@ -1,13 +1,10 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { Project, Snag } from '../types';
-import { generateReport } from '../services/reportGenerator';
-import { Database } from '../types/supabase';
+import { saveAs } from 'file-saver';
+import { generateReport, generateWordReport } from '../services/reportGenerator';
 
-interface Props {
-  project: Project;
-  snags: Snag[];
-}
+// ... existing imports
 
 export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
   const [loading, setLoading] = useState(false);
@@ -16,6 +13,7 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
   const [progress, setProgress] = useState<string>('');
 
   const handleGenerateReport = async () => {
+    // ... existing logic
     setLoading(true);
     setError(null);
     setProgress('Initializing report...');
@@ -55,15 +53,28 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
       setPublicUrl(data.publicUrl);
     } catch (err: any) {
       console.warn('Upload failed, falling back to direct download:', err);
-      // Fallback to direct download if we have the PDF blob but upload failed
-      // Note: We might need to regenerate or pass the blob if we want to support this fully,
-      // but for now let's just show the error.
-      // Actually, let's try to download if we can.
-      // Since we don't have the blob in scope if generateReport threw, we can't.
-      // But if upload threw, we do have it. 
-      // Refactoring to keep blob in scope is better, but let's keep it simple for now.
-
       setError('Report generation or upload failed. Please try again.');
+    } finally {
+      setLoading(false);
+      setProgress('');
+    }
+  };
+
+  const handleExportWord = async () => {
+    setLoading(true);
+    setError(null);
+    setProgress('Generating Word document...');
+
+    try {
+      const { blob, fileName } = await generateWordReport({
+        project,
+        snags,
+        onProgress: setProgress,
+      });
+      saveAs(blob, fileName);
+    } catch (err: any) {
+      console.error('Word export failed:', err);
+      setError('Word export failed. Please try again.');
     } finally {
       setLoading(false);
       setProgress('');
@@ -75,11 +86,16 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs uppercase tracking-wide text-bpas-grey font-syne">Automated reporting</p>
-          <h3 className="text-lg font-syne font-semibold text-bpas-black">Generate PDF</h3>
+          <h3 className="text-lg font-syne font-semibold text-bpas-black">Generate Report</h3>
         </div>
-        <button onClick={handleGenerateReport} disabled={loading} className="btn-primary disabled:opacity-60">
-          {loading ? (progress ? progress : 'Generating...') : 'Generate report'}
-        </button>
+        <div className="flex gap-2">
+          <button onClick={handleExportWord} disabled={loading} className="btn-secondary disabled:opacity-60">
+            Word
+          </button>
+          <button onClick={handleGenerateReport} disabled={loading} className="btn-primary disabled:opacity-60">
+            {loading ? (progress ? progress : 'Generating...') : 'PDF'}
+          </button>
+        </div>
       </div>
       {error && <p className="text-sm text-rose-600">{error}</p>}
       {publicUrl && (

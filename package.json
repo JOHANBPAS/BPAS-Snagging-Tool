@@ -13,6 +13,8 @@
     "@supabase/supabase-js": "^2.45.4",
     "browser-image-compression": "^2.0.2",
     "clsx": "^2.1.1",
+    "docx": "^9.5.1",
+    "file-saver": "^2.0.5",
     "idb": "^8.0.3",
     "jspdf": "^3.0.3",
     "jspdf-autotable": "^5.0.2",
@@ -24,6 +26,7 @@
     "recharts": "^2.12.7"
   },
   "devDependencies": {
+    "@types/file-saver": "^2.0.7",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.3",
