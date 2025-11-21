@@ -107,9 +107,57 @@ export const SnagDetailModal: React.FC<Props> = ({ snag, onClose, onEdit, onDele
           </div>
           <div className="space-y-2 rounded-lg border border-slate-200 p-3">
             <p className="text-xs uppercase tracking-wide text-slate-500">Photos</p>
+            import {ImageAnnotator} from './ImageAnnotator';
+
+            // ... (inside component)
+            const [annotatingUrl, setAnnotatingUrl] = useState<string | null>(null);
+
+            // ... (render)
+            {annotatingUrl && (
+              <ImageAnnotator
+                imageSrc={annotatingUrl}
+                onCancel={() => setAnnotatingUrl(null)}
+                onSave={async (file) => {
+                  // Upload annotated image as new photo
+                  const bucket = supabase.storage.from('snag-photos');
+                  const ext = 'jpg';
+                  const path = `${snag.id}/${Date.now()}-annotated.${ext}`;
+
+                  const { error: uploadError } = await bucket.upload(path, file, {
+                    contentType: 'image/jpeg',
+                    cacheControl: '3600',
+                    upsert: false
+                  });
+
+                  if (!uploadError) {
+                    const { data: urlData } = bucket.getPublicUrl(path);
+                    const publicUrl = urlData.publicUrl;
+
+                    await supabase.from('snag_photos').insert({
+                      snag_id: snag.id,
+                      photo_url: publicUrl
+                    });
+
+                    setPhotos(prev => [...prev, { id: publicUrl, snag_id: snag.id, photo_url: publicUrl }]);
+                  }
+                  setAnnotatingUrl(null);
+                }}
+              />
+            )}
+
             <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
               {photos.map((photo) => (
-                <img key={photo.id} src={photo.photo_url} className="h-32 w-full rounded-lg object-cover" />
+                <div key={photo.id} className="relative group">
+                  <img src={photo.photo_url} className="h-32 w-full rounded-lg object-cover" />
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg">
+                    <button
+                      onClick={() => setAnnotatingUrl(photo.photo_url)}
+                      className="bg-white text-slate-900 px-3 py-1 rounded-full text-xs font-semibold hover:bg-slate-100"
+                    >
+                      Annotate
+                    </button>
+                  </div>
+                </div>
               ))}
             </div>
             <FileUpload

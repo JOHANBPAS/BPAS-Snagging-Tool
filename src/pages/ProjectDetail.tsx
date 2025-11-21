@@ -78,6 +78,7 @@ const ProjectDetail: React.FC = () => {
         project={project}
         completedPct={summary.completedPct}
         action={<ReportPreview project={project} snags={snags} />}
+        onEdit={() => setIsEditingProject(true)}
       />
 
       <div className="grid gap-4 lg:grid-cols-3">
@@ -116,6 +117,14 @@ const ProjectDetail: React.FC = () => {
         }}
         onSnagChange={fetchSnags}
       />
+
+      {isEditingProject && (
+        <EditProjectModal
+          project={project}
+          onClose={() => setIsEditingProject(false)}
+          onUpdate={(updated) => setProject(updated)}
+        />
+      )}
     </div>
   );
 };

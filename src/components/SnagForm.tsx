@@ -410,6 +410,28 @@ export const SnagForm: React.FC<Props> = ({
           </div>
         </div>
       )}
+      import {ImageAnnotator} from './ImageAnnotator';
+
+      // ... (inside component)
+      const [annotatingPhoto, setAnnotatingPhoto] = useState<{ index: number; src: string } | null>(null);
+
+      // ... (render)
+      {annotatingPhoto && (
+        <ImageAnnotator
+          imageSrc={annotatingPhoto.src}
+          onCancel={() => setAnnotatingPhoto(null)}
+          onSave={(file) => {
+            const newPhotos = [...pendingPhotos];
+            newPhotos[annotatingPhoto.index] = {
+              file,
+              preview: URL.createObjectURL(file),
+            };
+            setPendingPhotos(newPhotos);
+            setAnnotatingPhoto(null);
+          }}
+        />
+      )}
+
       <div className="space-y-2">
         <span className="text-sm text-slate-600">Attach photos</span>
         <input
@@ -423,7 +445,23 @@ export const SnagForm: React.FC<Props> = ({
         {pendingPhotos.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {pendingPhotos.map((photo, idx) => (
-              <img key={photo.preview + idx} src={photo.preview} className="h-20 w-20 rounded-lg object-cover" />
+              <div key={photo.preview + idx} className="relative group">
+                <img
+                  src={photo.preview}
+                  className="h-20 w-20 rounded-lg object-cover cursor-pointer border border-slate-200"
+                  onClick={() => setAnnotatingPhoto({ index: idx, src: photo.preview })}
+                />
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg pointer-events-none">
+                  <span className="text-xs text-white font-medium">Annotate</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPendingPhotos(prev => prev.filter((_, i) => i !== idx))}
+                  className="absolute -top-2 -right-2 bg-rose-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow-sm"
+                >
+                  ✕
+                </button>
+              </div>
             ))}
           </div>
         )}

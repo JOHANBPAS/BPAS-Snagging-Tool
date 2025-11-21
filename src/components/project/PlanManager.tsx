@@ -113,72 +113,55 @@ export const PlanManager: React.FC<Props> = ({
                 setActivePlanId(newPlans[0]?.id || null);
             }
         }
-    };
-
-    const activePlan = plans.find((p) => p.id === activePlanId);
-    // Fallback to project.plan_image_url if no plans table entries yet (migration support)
-    const displayUrl = activePlan?.url || (plans.length === 0 ? project.plan_image_url : null);
-
-    return (
-        <div className="space-y-4">
-            <div className="flex items-center justify-between gap-4">
-                <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
-                    {plans.map((plan) => (
-                        <button
-                            key={plan.id}
-                            onClick={() => setActivePlanId(plan.id)}
-                            className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition ${activePlanId === plan.id
-                                ? 'bg-bpas-black text-white shadow-md'
-                                : 'bg-white text-slate-600 hover:bg-slate-50'
-                                }`}
-                        >
-                            {plan.name}
-                        </button>
+                        </button >
                     ))}
-                    {plans.length === 0 && project.plan_image_url && (
-                        <button
-                            className="whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium bg-bpas-black text-white shadow-md"
-                        >
-                            Legacy Plan
-                        </button>
-                    )}
-                </div>
-                <div className="flex-shrink-0 flex items-center gap-2">
-                    {activePlanId && (
-                        <button
-                            onClick={() => handleDeletePlan(activePlanId)}
-                            className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-100 transition"
-                        >
-                            Delete
-                        </button>
-                    )}
-                    <FileUpload
-                        label={loading ? "Uploading..." : "Add Plan"}
-                        bucket="plans"
-                        onUploaded={handlePlanUpload}
-                        className="text-xs"
-                    />
-                </div>
-            </div>
+{
+    plans.length === 0 && project.plan_image_url && (
+        <button
+            className="whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium bg-bpas-black text-white shadow-md"
+        >
+            Legacy Plan
+        </button>
+    )
+}
+                </div >
+    <div className="flex-shrink-0 flex items-center gap-2">
+        {activePlanId && (
+            <button
+                onClick={() => handleDeletePlan(activePlanId)}
+                className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-100 transition"
+            >
+                Delete
+            </button>
+        )}
+        <FileUpload
+            label={loading ? "Uploading..." : "Add Plan"}
+            bucket="plans"
+            onUploaded={handlePlanUpload}
+            className="text-xs"
+        />
+    </div>
+            </div >
 
-            {displayUrl ? (
-                <div className="relative">
-                    <PlanViewer
-                        planUrl={displayUrl}
-                        snags={snags.filter(s => s.plan_id === activePlanId || (!s.plan_id && !activePlanId))} // Filter snags by plan
-                        onSelectLocation={(coords) => onSelectLocation({ ...coords, planId: activePlanId || '' })}
-                    />
+{
+    displayUrl?(
+                <div className = "relative" >
+            <PlanViewer
+                planUrl={displayUrl}
+                snags={snags.filter(s => s.plan_id === activePlanId || (!s.plan_id && !activePlanId))} // Filter snags by plan
+                onSelectLocation={(coords) => onSelectLocation({ ...coords, planId: activePlanId || '' })}
+            />
                 </div>
             ) : (
-                <div className="flex h-64 flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 text-slate-500">
-                    <p className="mb-2">No floor plans uploaded yet.</p>
-                    <FileUpload label="Upload First Plan" bucket="plans" onUploaded={handlePlanUpload} />
-                </div>
-            )}
+    <div className="flex h-64 flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 text-slate-500">
+        <p className="mb-2">No floor plans uploaded yet.</p>
+        <FileUpload label="Upload First Plan" bucket="plans" onUploaded={handlePlanUpload} />
+    </div>
+)}
 
-            <p className="text-xs font-raleway text-bpas-grey">
-                Tap the plan to {editingSnag ? 'reposition the snag being edited' : 'start a new snag capture'}.
-            </p>
-        </div>
+<p className="text-xs font-raleway text-bpas-grey">
+    Tap the plan to {editingSnag ? 'reposition the snag being edited' : 'start a new snag capture'}.
+</p>
+        </div >
     );
 };
