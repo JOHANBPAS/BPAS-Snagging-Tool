@@ -3,8 +3,12 @@ import { supabase } from '../lib/supabaseClient';
 import { Project, Snag } from '../types';
 import { saveAs } from 'file-saver';
 import { generateReport, generateWordReport } from '../services/reportGenerator';
+import { Database } from '../types/supabase';
 
-// ... existing imports
+interface Props {
+  project: Project;
+  snags: Snag[];
+}
 
 export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
   const [loading, setLoading] = useState(false);

@@ -678,7 +678,7 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
                                         width: 600,
                                         height: 600 * (img.height / img.width),
                                     },
-                                }),
+                                } as any),
                             ],
                         })
                     );
@@ -779,18 +779,18 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
                 })
             );
 
-            const images: ImageRun[] = [];
+            const images: any[] = [];
             if (locationSnippet) {
                 images.push(new ImageRun({
                     data: locationSnippet,
                     transformation: { width: 200, height: 200 },
-                }));
+                } as any));
             }
             photos.forEach(photo => {
                 images.push(new ImageRun({
                     data: photo,
                     transformation: { width: 200, height: 200 },
-                }));
+                } as any));
             });
 
             if (images.length > 0) {
