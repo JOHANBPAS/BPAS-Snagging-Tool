@@ -56,8 +56,27 @@ const downscaleImage = async (dataUrl: string, maxSize = 1600, quality = 0.78): 
         img.src = dataUrl;
     });
 
-const getFloorPlans = async (project: Project): Promise<Array<{ planId: string; name: string; page: number; image: string }>> => {
-    // 1. Try fetching from project_plans table
+const getFloorPlans = async (project: Project, snags: Snag[]): Promise<Array<{ planId: string; name: string; page: number; image: string }>> => {
+    // 1. Identify relevant plans and pages from snags
+    const relevantMap = new Map<string, Set<number>>();
+
+    snags.forEach(snag => {
+        // Only consider snags that are actually placed on a plan
+        if (snag.plan_x != null && snag.plan_y != null) {
+            const planId = snag.plan_id || 'legacy';
+            const page = snag.plan_page ?? 1;
+
+            if (!relevantMap.has(planId)) {
+                relevantMap.set(planId, new Set());
+            }
+            relevantMap.get(planId)?.add(page);
+        }
+    });
+
+    // If no snags are placed, return empty (or should we return all? Assuming filter is desired)
+    if (relevantMap.size === 0) return [];
+
+    // 2. Try fetching from project_plans table
     const { data: plans } = await supabase
         .from('project_plans')
         .select('*')
@@ -69,7 +88,12 @@ const getFloorPlans = async (project: Project): Promise<Array<{ planId: string; 
     if (plans && plans.length > 0) {
         // Process plans in parallel
         const planPromises = plans.map(async (plan) => {
+            // Skip if this plan is not used by any snag
+            if (!relevantMap.has(plan.id)) return [];
+
+            const requiredPages = relevantMap.get(plan.id)!;
             const planResults: Array<{ planId: string; name: string; page: number; image: string }> = [];
+
             if (plan.url.toLowerCase().endsWith('.pdf')) {
                 const { GlobalWorkerOptions, getDocument } = await import('pdfjs-dist/legacy/build/pdf');
                 const workerSrc = new URL('pdfjs-dist/legacy/build/pdf.worker.min.mjs', import.meta.url).toString();
@@ -80,8 +104,10 @@ const getFloorPlans = async (project: Project): Promise<Array<{ planId: string; 
                     const buffer = await response.arrayBuffer();
                     const pdf = await getDocument({ data: buffer }).promise;
 
-                    // Process pages sequentially to avoid memory spikes, but plans are parallel
+                    // Only process pages that are actually used
                     for (let pageIndex = 1; pageIndex <= pdf.numPages; pageIndex++) {
+                        if (!requiredPages.has(pageIndex)) continue;
+
                         const page = await pdf.getPage(pageIndex);
                         const viewport = page.getViewport({ scale: 1.3 });
                         const canvas = document.createElement('canvas');
@@ -97,9 +123,12 @@ const getFloorPlans = async (project: Project): Promise<Array<{ planId: string; 
                     console.error(`Failed to load PDF for plan ${plan.name}`, e);
                 }
             } else {
-                const data = await toDataUrl(plan.url);
-                if (data) {
-                    planResults.push({ planId: plan.id, name: plan.name, page: 1, image: data });
+                // It's an image (page 1). Check if page 1 is needed (default)
+                if (requiredPages.has(1)) {
+                    const data = await toDataUrl(plan.url);
+                    if (data) {
+                        planResults.push({ planId: plan.id, name: plan.name, page: 1, image: data });
+                    }
                 }
             }
             return planResults;
@@ -110,37 +139,46 @@ const getFloorPlans = async (project: Project): Promise<Array<{ planId: string; 
 
     } else if (project.plan_image_url) {
         // Fallback to legacy single plan
-        const url = project.plan_image_url;
-        if (url.toLowerCase().endsWith('.pdf')) {
-            const { GlobalWorkerOptions, getDocument } = await import('pdfjs-dist/legacy/build/pdf');
-            const workerSrc = new URL('pdfjs-dist/legacy/build/pdf.worker.min.mjs', import.meta.url).toString();
-            GlobalWorkerOptions.workerSrc = workerSrc;
-            try {
-                const response = await fetch(url);
-                if (response.ok) {
-                    const buffer = await response.arrayBuffer();
-                    const pdf = await getDocument({ data: buffer }).promise;
-                    for (let pageIndex = 1; pageIndex <= pdf.numPages; pageIndex++) {
-                        const page = await pdf.getPage(pageIndex);
-                        const viewport = page.getViewport({ scale: 1.3 });
-                        const canvas = document.createElement('canvas');
-                        const context = canvas.getContext('2d');
-                        if (context) {
-                            canvas.width = viewport.width;
-                            canvas.height = viewport.height;
-                            await page.render({ canvasContext: context, viewport }).promise;
-                            const image = canvas.toDataURL('image/jpeg', 0.85);
-                            results.push({ planId: 'legacy', name: 'Floor Plan', page: pageIndex, image });
+        // Only process if 'legacy' is in relevantMap
+        if (relevantMap.has('legacy')) {
+            const requiredPages = relevantMap.get('legacy')!;
+            const url = project.plan_image_url;
+
+            if (url.toLowerCase().endsWith('.pdf')) {
+                const { GlobalWorkerOptions, getDocument } = await import('pdfjs-dist/legacy/build/pdf');
+                const workerSrc = new URL('pdfjs-dist/legacy/build/pdf.worker.min.mjs', import.meta.url).toString();
+                GlobalWorkerOptions.workerSrc = workerSrc;
+                try {
+                    const response = await fetch(url);
+                    if (response.ok) {
+                        const buffer = await response.arrayBuffer();
+                        const pdf = await getDocument({ data: buffer }).promise;
+                        for (let pageIndex = 1; pageIndex <= pdf.numPages; pageIndex++) {
+                            if (!requiredPages.has(pageIndex)) continue;
+
+                            const page = await pdf.getPage(pageIndex);
+                            const viewport = page.getViewport({ scale: 1.3 });
+                            const canvas = document.createElement('canvas');
+                            const context = canvas.getContext('2d');
+                            if (context) {
+                                canvas.width = viewport.width;
+                                canvas.height = viewport.height;
+                                await page.render({ canvasContext: context, viewport }).promise;
+                                const image = canvas.toDataURL('image/jpeg', 0.85);
+                                results.push({ planId: 'legacy', name: 'Floor Plan', page: pageIndex, image });
+                            }
                         }
                     }
+                } catch (e) {
+                    console.error('Failed to load legacy PDF plan', e);
                 }
-            } catch (e) {
-                console.error('Failed to load legacy PDF plan', e);
-            }
-        } else {
-            const data = await toDataUrl(url);
-            if (data) {
-                results.push({ planId: 'legacy', name: 'Floor Plan', page: 1, image: data });
+            } else {
+                if (requiredPages.has(1)) {
+                    const data = await toDataUrl(url);
+                    if (data) {
+                        results.push({ planId: 'legacy', name: 'Floor Plan', page: 1, image: data });
+                    }
+                }
             }
         }
     }
@@ -252,7 +290,10 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
     // So we should use the index from the INPUT `snags` array.
     snags.forEach((s, i) => snagIndexMap.set(s.id, i + 1));
 
-    const floorPlans = await getFloorPlans(project);
+    // Pass sortedSnags (or original snags) to filter plans. 
+    // We use sortedSnags because that's what we are reporting on? 
+    // Actually, we should use the full list of snags being reported.
+    const floorPlans = await getFloorPlans(project, sortedSnags);
     if (floorPlans.length) {
         for (let idx = 0; idx < floorPlans.length; idx++) {
             onProgress?.(`Processing floor plan ${idx + 1} of ${floorPlans.length}...`);
