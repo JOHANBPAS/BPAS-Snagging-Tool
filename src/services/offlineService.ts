@@ -41,31 +41,43 @@ export const cacheProjectAssets = async (projectIds: string[], onProgress?: (mes
 
             // 0. Prime Dashboard & Projects Page Cache
             if (processedProjects === 0) {
+                console.log('[OfflineService] Priming Dashboard cache...');
                 // Dashboard
                 await supabase.from('projects').select('*');
+                console.log('[OfflineService] Dashboard projects fetched');
                 await supabase.from('snags').select('*');
+                console.log('[OfflineService] Dashboard snags fetched');
 
                 // Projects Page
+                console.log('[OfflineService] Priming Projects page cache...');
                 await supabase.from('projects').select('*').order('created_at', { ascending: false });
+                console.log('[OfflineService] Projects page fetched');
                 await supabase.from('snags').select('project_id, status').neq('status', 'verified');
+                console.log('[OfflineService] Projects snags fetched');
             }
 
             // 1. Fetch Project Data (triggers NetworkFirst cache)
             // Project Detail Page - Specific Queries
+            console.log(`[OfflineService] Fetching project ${projectId}...`);
             await supabase.from('projects').select('*').eq('id', projectId).single();
+            console.log(`[OfflineService] Project ${projectId} details fetched`);
+
             await supabase.from('snags').select('*').eq('project_id', projectId).order('created_at', { ascending: true });
+            console.log(`[OfflineService] Project ${projectId} snags fetched`);
 
             // Fetch comments (if any)
             const { data: snags } = await supabase.from('snags').select('id').eq('project_id', projectId);
             if (snags && snags.length > 0) {
                 const snagIds = snags.map(s => s.id);
                 await supabase.from('snag_comments').select('*, profiles(*)').in('snag_id', snagIds);
+                console.log(`[OfflineService] Project ${projectId} comments fetched`);
             }
 
             // 2. Fetch Assets (Plans)
             onProgress?.(`Downloading plans for project ${processedProjects + 1}...`, (processedProjects / totalProjects) * 100);
             const { data: plans } = await supabase.from('project_plans').select('url').eq('project_id', projectId);
             if (plans) {
+                console.log(`[OfflineService] Caching ${plans.length} plans for project ${projectId}...`);
                 for (const plan of plans) {
                     try {
                         await fetch(plan.url, { mode: 'cors' });
@@ -79,6 +91,7 @@ export const cacheProjectAssets = async (projectIds: string[], onProgress?: (mes
             onProgress?.(`Downloading photos for project ${processedProjects + 1}...`, (processedProjects / totalProjects) * 100);
             const { data: photos } = await supabase.from('snag_photos').select('photo_url').in('snag_id', snags?.map(s => s.id) || []);
             if (photos) {
+                console.log(`[OfflineService] Caching ${photos.length} photos for project ${projectId}...`);
                 for (const photo of photos) {
                     try {
                         // Construct full URL if it's a path
@@ -93,6 +106,15 @@ export const cacheProjectAssets = async (projectIds: string[], onProgress?: (mes
             }
 
             processedProjects++;
+        }
+
+        console.log('[OfflineService] Sync complete! Checking cache...');
+        // Log cache contents
+        if ('caches' in window) {
+            const cache = await caches.open('api-cache');
+            const keys = await cache.keys();
+            console.log(`[OfflineService] Cache now has ${keys.length} entries`);
+            keys.forEach(req => console.log(`  - ${req.url}`));
         }
 
         onProgress?.('Sync complete!', 100);
