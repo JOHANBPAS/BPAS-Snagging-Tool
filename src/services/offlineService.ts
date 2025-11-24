@@ -39,6 +39,14 @@ export const cacheProjectAssets = async (projectIds: string[], onProgress?: (mes
         for (const projectId of projectIds) {
             onProgress?.(`Syncing project data (${processedProjects + 1}/${totalProjects})...`, (processedProjects / totalProjects) * 100);
 
+            // 0. Prime Dashboard Cache (Fetch all projects and snags)
+            // We do this once (or for each loop, but better once outside? No, let's do it implicitly or explicitly)
+            // Actually, let's just do it for the first project to ensure it's fresh.
+            if (processedProjects === 0) {
+                await supabase.from('projects').select('*');
+                await supabase.from('snags').select('*');
+            }
+
             // 1. Fetch Project Data (triggers NetworkFirst cache)
             await supabase.from('projects').select('*').eq('id', projectId);
             await supabase.from('snags').select('*').eq('project_id', projectId);

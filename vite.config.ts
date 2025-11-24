@@ -30,7 +30,7 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         runtimeCaching: [
           {
-            urlPattern: /^https:\/\/gzwarhhhvkhjosqzrffw\.supabase\.co\/storage\/v1\/object\/public\/plans\/.*/i,
+            urlPattern: /^https:\/\/.*\.supabase\.co\/storage\/v1\/object\/public\/plans\/.*/i,
             handler: 'CacheFirst',
             options: {
               cacheName: 'plans-cache',
@@ -44,12 +44,12 @@ export default defineConfig({
             },
           },
           {
-            urlPattern: /^https:\/\/gzwarhhhvkhjosqzrffw\.supabase\.co\/rest\/v1\/.*/i,
+            urlPattern: /^https:\/\/.*\.supabase\.co\/rest\/v1\/.*/i,
             handler: 'NetworkFirst',
             options: {
               cacheName: 'api-cache',
               expiration: {
-                maxEntries: 100,
+                maxEntries: 200,
                 maxAgeSeconds: 60 * 60 * 24 * 7, // 7 days
               },
               cacheableResponse: {

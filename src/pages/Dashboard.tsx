@@ -16,8 +16,12 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      const { data: projectData } = await supabase.from('projects').select('*');
-      const { data: snagData } = await supabase.from('snags').select('*');
+      const { data: projectData, error: projectError } = await supabase.from('projects').select('*');
+      const { data: snagData, error: snagError } = await supabase.from('snags').select('*');
+
+      if (projectError) console.error('Error fetching projects:', projectError);
+      if (snagError) console.error('Error fetching snags:', snagError);
+
       setProjects((projectData as Project[]) || []);
       setSnags((snagData as Snag[]) || []);
     };
