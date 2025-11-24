@@ -1,36 +1,40 @@
 import React from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { CacheDebugger } from '../components/CacheDebugger';
 
 const Settings: React.FC = () => {
-  const { profile, user } = useAuth();
+  const { signOut, user, profile } = useAuth();
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <p className="text-xs uppercase tracking-wide text-slate-500">Profile</p>
-        <h3 className="text-xl font-semibold text-slate-900">User settings</h3>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
-            <p className="text-xs text-slate-500">Name</p>
-            <p className="text-sm font-semibold text-slate-900">{profile?.full_name}</p>
+    <div className="space-y-6">
+      <div className="rounded-2xl bg-white p-6 shadow-sm border border-bpas-grey/20">
+        <h2 className="text-xl font-syne font-semibold text-bpas-black mb-4">Account Settings</h2>
+
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs uppercase tracking-wide text-bpas-grey font-syne">Email</label>
+            <p className="text-bpas-black font-medium">{user?.email}</p>
           </div>
-          <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
-            <p className="text-xs text-slate-500">Email</p>
-            <p className="text-sm font-semibold text-slate-900">{user?.email}</p>
+
+          <div>
+            <label className="text-xs uppercase tracking-wide text-bpas-grey font-syne">Role</label>
+            <p className="text-bpas-black font-medium capitalize">{profile?.role || 'User'}</p>
           </div>
-          <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
-            <p className="text-xs text-slate-500">Role</p>
-            <p className="text-sm font-semibold text-slate-900">{profile?.role}</p>
-          </div>
-          <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
-            <p className="text-xs text-slate-500">User ID</p>
-            <p className="text-xs font-mono text-slate-900">{user?.id}</p>
+
+          <div className="pt-4">
+            <button
+              onClick={() => signOut()}
+              className="rounded-lg bg-rose-50 px-4 py-2 text-sm font-medium text-rose-600 hover:bg-rose-100 transition-colors"
+            >
+              Sign out
+            </button>
           </div>
         </div>
       </div>
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <p className="text-xs uppercase tracking-wide text-slate-500">Support</p>
-        <p className="text-sm text-slate-700">Need help? Add FAQs, help links, or support contact here.</p>
+
+      <div className="rounded-2xl bg-white p-6 shadow-sm border border-bpas-grey/20">
+        <h2 className="text-xl font-syne font-semibold text-bpas-black mb-4">Diagnostics</h2>
+        <CacheDebugger />
       </div>
     </div>
   );
