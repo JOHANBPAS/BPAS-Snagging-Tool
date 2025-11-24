@@ -55,6 +55,10 @@ export default defineConfig({
               cacheableResponse: {
                 statuses: [0, 200],
               },
+              matchOptions: {
+                ignoreVary: true,
+                ignoreSearch: false,
+              },
             },
           },
         ],
