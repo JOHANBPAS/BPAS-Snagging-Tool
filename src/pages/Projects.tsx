@@ -14,8 +14,14 @@ const Projects: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const fetchProjects = async () => {
-    const { data: projectsData } = await supabase.from('projects').select('*').order('created_at', { ascending: false });
-    setProjects((projectsData as Project[]) || []);
+    try {
+      const { data: projectsData, error } = await supabase.from('projects').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      setProjects((projectsData as Project[]) || []);
+    } catch (err: any) {
+      console.error('Error fetching projects:', err);
+      setError(err.message || 'Failed to load projects');
+    }
 
     // Fetch open snags count for all projects
     // Note: In a larger app, this should be a database view or a function

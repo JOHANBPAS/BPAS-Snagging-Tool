@@ -23,9 +23,19 @@ export const ProjectDetail: React.FC = () => {
   const [createCoords, setCreateCoords] = useState<{ x: number; y: number; page: number; planId?: string } | null>(null);
   const [editCoords, setEditCoords] = useState<{ x: number; y: number; page: number; planId?: string } | null>(null);
 
+  const [error, setError] = useState<string | null>(null);
+
   const fetchProject = async () => {
-    const { data } = await supabase.from('projects').select('*').eq('id', projectId).single();
-    setProject((data as Project) || null);
+    try {
+      const { data, error } = await supabase.from('projects').select('*').eq('id', projectId).single();
+      if (error) throw error;
+      setProject((data as Project) || null);
+    } catch (err: any) {
+      console.error('Error fetching project:', err);
+      setError(err.message || 'Failed to load project');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const fetchSnags = async () => {
@@ -85,7 +95,22 @@ export const ProjectDetail: React.FC = () => {
     return { total, statusCounts, completedPct };
   }, [snags]);
 
-  if (!project) return <p className="p-4 text-slate-700">Loading project...</p>;
+  if (loading) return <p className="p-4 text-slate-700">Loading project...</p>;
+  if (error) return (
+    <div className="p-4">
+      <div className="rounded-lg bg-red-50 p-4 text-red-800">
+        <h3 className="font-bold">Error loading project</h3>
+        <p>{error}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-2 rounded bg-red-100 px-3 py-1 text-sm font-medium hover:bg-red-200"
+        >
+          Retry
+        </button>
+      </div>
+    </div>
+  );
+  if (!project) return <p className="p-4 text-slate-700">Project not found.</p>;
 
   return (
     <div className="space-y-4">
