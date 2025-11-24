@@ -39,23 +39,23 @@ export const cacheProjectAssets = async (projectIds: string[], onProgress?: (mes
         for (const projectId of projectIds) {
             onProgress?.(`Syncing project data (${processedProjects + 1}/${totalProjects})...`, (processedProjects / totalProjects) * 100);
 
-            // 0. Prime Dashboard Cache (Fetch all projects and snags)
-            // We do this once (or for each loop, but better once outside? No, let's do it implicitly or explicitly)
-            // Actually, let's just do it for the first project to ensure it's fresh.
+            // 0. Prime Dashboard & Projects Page Cache
             if (processedProjects === 0) {
+                // Dashboard
                 await supabase.from('projects').select('*');
                 await supabase.from('snags').select('*');
+
+                // Projects Page
+                await supabase.from('projects').select('*').order('created_at', { ascending: false });
+                await supabase.from('snags').select('project_id, status').neq('status', 'verified');
             }
 
             // 1. Fetch Project Data (triggers NetworkFirst cache)
-            await supabase.from('projects').select('*').eq('id', projectId);
-            await supabase.from('snags').select('*').eq('project_id', projectId);
-            await supabase.from('snag_comments').select('*, profiles(*)').eq('snag_id', projectId); // This might be wrong, comments link to snags not projects directly. 
-            // Correct query for comments: we need to get snags first, then comments. 
-            // But simpler: just fetch all comments for snags in this project.
-            // Supabase doesn't support deep nested filtering easily in one go for caching purposes without a join.
-            // Let's fetch snags first, then comments for those snags.
+            // Project Detail Page - Specific Queries
+            await supabase.from('projects').select('*').eq('id', projectId).single();
+            await supabase.from('snags').select('*').eq('project_id', projectId).order('created_at', { ascending: true });
 
+            // Fetch comments (if any)
             const { data: snags } = await supabase.from('snags').select('id').eq('project_id', projectId);
             if (snags && snags.length > 0) {
                 const snagIds = snags.map(s => s.id);
