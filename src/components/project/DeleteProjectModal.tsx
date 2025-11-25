@@ -108,8 +108,21 @@ export const DeleteProjectModal: React.FC<Props> = ({ project, onClose }) => {
                 }
             }
 
-            // Step 4: Delete project_plans records first (before project deletion)
+            // Step 4: Update snags to remove plan references, then delete project_plans
             setDeletionProgress('Removing project plans...');
+
+            // First, set all snags' plan_id to NULL to avoid foreign key constraint
+            const { error: snagUpdateError } = await supabase
+                .from('snags')
+                .update({ plan_id: null })
+                .eq('project_id', project.id);
+
+            if (snagUpdateError) {
+                console.warn('Failed to update snag plan references:', snagUpdateError);
+                // Continue anyway - this might not be critical
+            }
+
+            // Now delete the project_plans records
             const { error: plansDeleteError } = await supabase
                 .from('project_plans')
                 .delete()

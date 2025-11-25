@@ -105,18 +105,42 @@ export const PlanManager: React.FC<Props> = ({
     };
 
     const handleDeletePlan = async (planId: string) => {
-        if (!confirm('Are you sure you want to delete this plan? Snags on this plan may lose their location context.')) return;
+        if (!confirm('Are you sure you want to delete this plan? Snags on this plan will lose their location context.')) return;
 
-        const { error } = await supabase.from('project_plans').delete().eq('id', planId);
+        try {
+            // Step 1: Update all snags that reference this plan to set plan_id to NULL
+            const { error: updateError } = await supabase
+                .from('snags')
+                .update({ plan_id: null })
+                .eq('plan_id', planId);
 
-        if (error) {
-            console.error('Error deleting plan:', error);
-        } else {
+            if (updateError) {
+                console.error('Error updating snags:', updateError);
+                alert(`Failed to update snags: ${updateError.message}`);
+                return;
+            }
+
+            // Step 2: Now it's safe to delete the plan
+            const { error: deleteError } = await supabase
+                .from('project_plans')
+                .delete()
+                .eq('id', planId);
+
+            if (deleteError) {
+                console.error('Error deleting plan:', deleteError);
+                alert(`Failed to delete plan: ${deleteError.message}`);
+                return;
+            }
+
+            // Step 3: Update UI
             const newPlans = plans.filter((p) => p.id !== planId);
             setPlans(newPlans);
             if (activePlanId === planId) {
                 setActivePlanId(newPlans[0]?.id || null);
             }
+        } catch (err: any) {
+            console.error('Unexpected error deleting plan:', err);
+            alert(`Failed to delete plan: ${err.message || 'Unknown error'}`);
         }
     };
 
