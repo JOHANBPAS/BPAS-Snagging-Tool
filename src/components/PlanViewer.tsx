@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-
+import { TransformWrapper, TransformComponent, useTransformContext } from 'react-zoom-pan-pinch';
 import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist/legacy/build/pdf';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 const workerSrc = new URL('pdfjs-dist/legacy/build/pdf.worker.min.mjs', import.meta.url).toString();
@@ -15,13 +15,12 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const transformComponentRef = useRef<any>(null);
+
   const [hovered, setHovered] = useState<{ x: number; y: number } | null>(null);
-  const [scale, setScale] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [isPanning, setIsPanning] = useState(false);
-  const [panStart, setPanStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [imagePlan, setImagePlan] = useState<string | null>(null);
   const [planDimensions, setPlanDimensions] = useState<{ width: number; height: number } | null>(null);
+  const [currentTransform, setCurrentTransform] = useState({ positionX: 0, positionY: 0, scale: 1 });
 
   // PDF State
   const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null);
@@ -48,15 +47,8 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
     [snags, currentPageNumber],
   );
 
-  const resetView = () => {
-    setScale(1);
-    setPan({ x: 0, y: 0 });
-    setHovered(null);
-  };
-
   // Load PDF Document
   useEffect(() => {
-    resetView();
     setCurrentPage(0);
     setPdfDoc(null);
     setPlanDimensions(null);
@@ -155,32 +147,21 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
     return { width, height, left, top, containerLeft: container.left, containerTop: container.top };
   };
 
-  const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handlePlanClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!containerRef.current || !totalPages) return;
 
     const rect = getContentRect();
     if (!rect) return;
 
-    // Calculate click position relative to the rendered plan image
-    // Account for pan and scale
-    // The click event is on the container, but we need coordinates relative to the transformed content
+    const { positionX, positionY, scale } = currentTransform;
 
-    // Actually, let's simplify. We can calculate relative to the container, then adjust for content rect, then adjust for pan/scale.
-    // But wait, the click is on the transformed element if we put onClick there? 
-    // No, onClick is on the container.
-
-    // Mouse relative to container (unscaled, unpanned space)
+    // Calculate click position relative to the container
     const mouseX = e.clientX - rect.containerLeft;
     const mouseY = e.clientY - rect.containerTop;
 
-    // Adjust for Pan and Scale to get back to "container space" if it wasn't transformed
-    // The content div is transformed by translate(pan.x, pan.y) scale(scale)
-    // So the "virtual" position in the un-transformed container is:
-    const transformedX = (mouseX - pan.x) / scale;
-    const transformedY = (mouseY - pan.y) / scale;
-
-    // Now check if this falls within the image rect (which is centered in the container)
-    // The image rect is at (rect.left, rect.top) with dimensions (rect.width, rect.height)
+    // Adjust for transform (pan and scale)
+    const transformedX = (mouseX - positionX) / scale;
+    const transformedY = (mouseY - positionY) / scale;
 
     // Relative to image top-left
     const imageX = transformedX - rect.left;
@@ -196,43 +177,30 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
     }
   };
 
-  const clampScale = (next: number) => Math.min(4, Math.max(1, next));
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!containerRef.current) return;
 
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
+    const rect = getContentRect();
+    if (!rect) return;
 
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      // Use a small delta for smoother zooming
-      const delta = e.deltaY > 0 ? -0.1 : 0.1;
-      setScale((s) => clampScale(s + delta));
-    };
+    const { positionX, positionY, scale } = currentTransform;
 
-    // Add non-passive listener to ensure preventDefault works
-    container.addEventListener('wheel', onWheel, { passive: false });
+    const mouseX = e.clientX - rect.containerLeft;
+    const mouseY = e.clientY - rect.containerTop;
+    const transformedX = (mouseX - positionX) / scale;
+    const transformedY = (mouseY - positionY) / scale;
+    const imageX = transformedX - rect.left;
+    const imageY = transformedY - rect.top;
+    const normalizedX = imageX / rect.width;
+    const normalizedY = imageY / rect.height;
 
-    return () => {
-      container.removeEventListener('wheel', onWheel);
-    };
-  }, []);
-
-  const startPan = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (scale <= 1) return;
-    setIsPanning(true);
-    setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+    if (normalizedX >= 0 && normalizedX <= 1 && normalizedY >= 0 && normalizedY <= 1) {
+      setHovered({ x: normalizedX, y: normalizedY });
+    } else {
+      setHovered(null);
+    }
   };
 
-  const onPan = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!isPanning) return;
-    setPan({ x: e.clientX - panStart.x, y: e.clientY - panStart.y });
-  };
-
-  const endPan = () => setIsPanning(false);
-
-  // Helper to position markers
-  // We need to render markers relative to the IMAGE, not the container.
-  // The easiest way is to have a wrapper div that exactly matches the image dimensions and position.
   const contentRect = getContentRect();
 
   return (
@@ -242,26 +210,8 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
           <p className="text-xs uppercase tracking-wide text-slate-500">Floor plan</p>
           <h3 className="text-lg font-semibold text-slate-900">Tap to place snags</h3>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-700">
-            <button
-              type="button"
-              className="rounded bg-white px-2 py-1 shadow hover:bg-slate-100"
-              onClick={() => setScale((s) => clampScale(s - 0.2))}
-            >
-              –
-            </button>
-            <span>{Math.round(scale * 100)}%</span>
-            <button
-              type="button"
-              className="rounded bg-white px-2 py-1 shadow hover:bg-slate-100"
-              onClick={() => setScale((s) => clampScale(s + 0.2))}
-            >
-              +
-            </button>
-          </div>
-        </div>
       </div>
+
       {isPdf && totalPages > 1 && (
         <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
           <button
@@ -269,7 +219,7 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
             disabled={currentPage === 0}
             onClick={() => {
               setCurrentPage((p) => Math.max(0, p - 1));
-              resetView();
+              transformComponentRef.current?.resetTransform();
             }}
             className="rounded-lg px-3 py-1 text-sm font-medium text-slate-600 hover:bg-white hover:shadow-sm disabled:opacity-50"
           >
@@ -283,7 +233,7 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
             disabled={currentPage === totalPages - 1}
             onClick={() => {
               setCurrentPage((p) => Math.min(totalPages - 1, p + 1));
-              resetView();
+              transformComponentRef.current?.resetTransform();
             }}
             className="rounded-lg px-3 py-1 text-sm font-medium text-slate-600 hover:bg-white hover:shadow-sm disabled:opacity-50"
           >
@@ -291,138 +241,136 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
           </button>
         </div>
       )}
+
       {planUrl ? (
         (isPdf ? pdfDoc : imagePlan) ? (
-          <div className="relative h-[50vh] md:h-auto md:aspect-[16/9] w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
-            <div
-              ref={containerRef}
-              onClick={handleClick}
-              onMouseDown={startPan}
-              onMouseMove={(e) => {
-                if (!containerRef.current || !contentRect) return;
-                if (scale > 1) {
-                  onPan(e);
-                }
+          <TransformWrapper
+            ref={transformComponentRef}
+            initialScale={1}
+            minScale={0.5}
+            maxScale={4}
+            centerOnInit
+            wheel={{ step: 0.1 }}
+            panning={{
+              velocityDisabled: true,
+            }}
+            limitToBounds={false}
+            centerZoomedOut
+            doubleClick={{ disabled: true }}
+            onTransformed={(ref, state) => {
+              setCurrentTransform({
+                positionX: state.positionX,
+                positionY: state.positionY,
+                scale: state.scale,
+              });
+            }}
+          >
+            {({ zoomIn, zoomOut, resetTransform }) => (
+              <>
+                {/* Zoom Controls */}
+                <div className="mb-2 flex items-center justify-end gap-2">
+                  <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-700">
+                    <button
+                      type="button"
+                      className="rounded bg-white px-2 py-1 shadow hover:bg-slate-100 transition-colors"
+                      onClick={() => zoomOut(0.2)}
+                      title="Zoom out"
+                    >
+                      –
+                    </button>
+                    <span className="min-w-[3rem] text-center">{Math.round(currentTransform.scale * 100)}%</span>
+                    <button
+                      type="button"
+                      className="rounded bg-white px-2 py-1 shadow hover:bg-slate-100 transition-colors"
+                      onClick={() => zoomIn(0.2)}
+                      title="Zoom in"
+                    >
+                      +
+                    </button>
+                    <button
+                      type="button"
+                      className="ml-1 rounded bg-white px-2 py-1 shadow hover:bg-slate-100 transition-colors"
+                      onClick={() => resetTransform()}
+                      title="Reset view"
+                    >
+                      ⟲
+                    </button>
+                  </div>
+                </div>
 
-                // Calculate hover relative to image
-                // Same logic as click
-                const mouseX = e.clientX - contentRect.containerLeft;
-                const mouseY = e.clientY - contentRect.containerTop;
-                const transformedX = (mouseX - pan.x) / scale;
-                const transformedY = (mouseY - pan.y) / scale;
-                const imageX = transformedX - contentRect.left;
-                const imageY = transformedY - contentRect.top;
-                const normalizedX = imageX / contentRect.width;
-                const normalizedY = imageY / contentRect.height;
-
-                if (normalizedX >= 0 && normalizedX <= 1 && normalizedY >= 0 && normalizedY <= 1) {
-                  setHovered({ x: normalizedX, y: normalizedY });
-                } else {
-                  setHovered(null);
-                }
-              }}
-              onMouseLeave={() => {
-                setHovered(null);
-                endPan();
-              }}
-              onMouseUp={endPan}
-              onMouseOut={endPan}
-              onTouchStart={(e) => {
-                if (e.touches.length === 2) {
-                  // Pinch start
-                  const dist = Math.hypot(
-                    e.touches[0].clientX - e.touches[1].clientX,
-                    e.touches[0].clientY - e.touches[1].clientY
-                  );
-                  // Store initial distance for zoom calculation
-                  (e.target as any).dataset.startDist = dist;
-                  (e.target as any).dataset.startScale = scale;
-                } else if (e.touches.length === 1 && scale > 1) {
-                  // Pan start
-                  setIsPanning(true);
-                  setPanStart({ x: e.touches[0].clientX - pan.x, y: e.touches[0].clientY - pan.y });
-                }
-              }}
-              onTouchMove={(e) => {
-                if (e.touches.length === 2) {
-                  // Pinch zoom
-                  e.preventDefault();
-                  const dist = Math.hypot(
-                    e.touches[0].clientX - e.touches[1].clientX,
-                    e.touches[0].clientY - e.touches[1].clientY
-                  );
-                  const startDist = parseFloat((e.target as any).dataset.startDist);
-                  const startScale = parseFloat((e.target as any).dataset.startScale);
-                  if (startDist && startScale) {
-                    const newScale = startScale * (dist / startDist);
-                    setScale(clampScale(newScale));
-                  }
-                } else if (e.touches.length === 1 && isPanning) {
-                  // Pan
-                  e.preventDefault();
-                  setPan({ x: e.touches[0].clientX - panStart.x, y: e.touches[0].clientY - panStart.y });
-                }
-              }}
-              onTouchEnd={() => {
-                setIsPanning(false);
-              }}
-              className="relative h-full w-full cursor-crosshair touch-none"
-            >
-              <div
-                ref={contentRef}
-                className="absolute inset-0"
-                style={{
-                  transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
-                  transformOrigin: 'top left',
-                }}
-              >
-                {/* Render Image/Canvas */}
-                {isPdf ? (
-                  <>
-                    <canvas ref={canvasRef} className="h-full w-full object-contain" />
-                    {renderingPage && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-white/50">
-                        <p className="text-xs font-semibold text-slate-600">Rendering...</p>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <img src={imagePlan!} className="h-full w-full object-contain" />
-                )}
-
-                {/* Render Markers Overlay - Positioned exactly over the image content */}
-                {contentRect && (
-                  <div
-                    className="absolute"
-                    style={{
-                      left: contentRect.left,
-                      top: contentRect.top,
-                      width: contentRect.width,
-                      height: contentRect.height,
-                      pointerEvents: 'none' // Let clicks pass through to container
+                <div
+                  ref={containerRef}
+                  className="relative h-[50vh] md:h-auto md:aspect-[16/9] w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
+                >
+                  <TransformComponent
+                    wrapperClass="!w-full !h-full"
+                    contentClass="!w-full !h-full flex items-center justify-center"
+                    wrapperStyle={{
+                      width: '100%',
+                      height: '100%',
+                      cursor: currentTransform.scale > 1 ? 'grab' : 'crosshair',
+                      touchAction: 'none',
                     }}
                   >
-                    {markers.map((marker) => (
-                      <div
-                        key={marker.id}
-                        className="absolute flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-rose-500 text-xs font-bold text-white shadow-sm border border-white"
-                        style={{ left: `${marker.x * 100}%`, top: `${marker.y * 100}%` }}
-                        title={marker.title}
-                      >
-                        {marker.index}
-                      </div>
-                    ))}
-                  </div>
-                )}
+                    <div
+                      ref={contentRef}
+                      className="relative"
+                      onClick={handlePlanClick}
+                      onMouseMove={handleMouseMove}
+                      onMouseLeave={() => setHovered(null)}
+                      style={{
+                        cursor: currentTransform.scale > 1 ? 'inherit' : 'crosshair',
+                      }}
+                    >
+                      {/* Render Image/Canvas */}
+                      {isPdf ? (
+                        <>
+                          <canvas ref={canvasRef} className="max-w-full max-h-full object-contain" />
+                          {renderingPage && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-white/50">
+                              <p className="text-xs font-semibold text-slate-600">Rendering...</p>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <img src={imagePlan!} className="max-w-full max-h-full object-contain" alt="Floor plan" />
+                      )}
 
-                {hovered && (
-                  <div className="absolute bottom-2 right-2 rounded-lg bg-black/60 px-2 py-1 text-xs text-white z-10">
-                    {`${(hovered.x * 100).toFixed(1)}%, ${(hovered.y * 100).toFixed(1)}%`}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+                      {/* Render Markers Overlay - Positioned exactly over the image content */}
+                      {contentRect && (
+                        <div
+                          className="absolute inset-0"
+                          style={{
+                            pointerEvents: 'none', // Let clicks pass through to container
+                          }}
+                        >
+                          {markers.map((marker) => (
+                            <div
+                              key={marker.id}
+                              className="absolute flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-rose-500 text-xs font-bold text-white shadow-md border-2 border-white"
+                              style={{
+                                left: `${marker.x * 100}%`,
+                                top: `${marker.y * 100}%`,
+                              }}
+                              title={marker.title}
+                            >
+                              {marker.index}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {hovered && (
+                        <div className="absolute bottom-2 right-2 rounded-lg bg-black/70 px-2 py-1 text-xs text-white z-10 pointer-events-none">
+                          {`${(hovered.x * 100).toFixed(1)}%, ${(hovered.y * 100).toFixed(1)}%`}
+                        </div>
+                      )}
+                    </div>
+                  </TransformComponent>
+                </div>
+              </>
+            )}
+          </TransformWrapper>
         ) : loadingPdf ? (
           <p className="text-sm text-slate-600">Loading floor plan…</p>
         ) : (

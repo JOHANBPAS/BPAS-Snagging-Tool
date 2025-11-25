@@ -7,6 +7,7 @@ import { ProjectHeader } from '../components/project/ProjectHeader';
 import { PlanManager } from '../components/project/PlanManager';
 import { SnagManager } from '../components/project/SnagManager';
 import { EditProjectModal } from '../components/project/EditProjectModal';
+import { DeleteProjectModal } from '../components/project/DeleteProjectModal';
 import { useAuth } from '../hooks/useAuth';
 
 export const ProjectDetail: React.FC = () => {
@@ -19,6 +20,7 @@ export const ProjectDetail: React.FC = () => {
   const [selected, setSelected] = useState<Snag | null>(null);
   const [editingSnag, setEditingSnag] = useState<Snag | null>(null);
   const [isEditingProject, setIsEditingProject] = useState(false);
+  const [isDeletingProject, setIsDeletingProject] = useState(false);
   const [checklistFields, setChecklistFields] = useState<ChecklistField[]>([]);
   const [createCoords, setCreateCoords] = useState<{ x: number; y: number; page: number; planId?: string } | null>(null);
   const [editCoords, setEditCoords] = useState<{ x: number; y: number; page: number; planId?: string } | null>(null);
@@ -126,6 +128,7 @@ export const ProjectDetail: React.FC = () => {
           </button>
         }
         onEdit={() => setIsEditingProject(true)}
+        onDelete={() => setIsDeletingProject(true)}
       />
 
       <div className="flex flex-col gap-4 lg:grid lg:grid-cols-3">
@@ -171,6 +174,13 @@ export const ProjectDetail: React.FC = () => {
           project={project}
           onClose={() => setIsEditingProject(false)}
           onUpdate={(updated) => setProject(updated)}
+        />
+      )}
+
+      {isDeletingProject && (
+        <DeleteProjectModal
+          project={project}
+          onClose={() => setIsDeletingProject(false)}
         />
       )}
     </div>

@@ -105,6 +105,16 @@ create policy "Projects claim unowned" on public.projects
   for update using (created_by is null) with check (created_by = auth.uid());
 create policy "Projects readable" on public.projects
   for select using (true);
+create policy "Project owners and admins can delete archived" on public.projects
+  for delete using (
+    status = 'archived' AND (
+      created_by = auth.uid() OR 
+      EXISTS (
+        SELECT 1 FROM public.profiles 
+        WHERE id = auth.uid() AND role = 'admin'
+      )
+    )
+  );
 
 -- Snags: users can view snags for projects they can see; owners manage
 create policy "Snags readable" on public.snags
