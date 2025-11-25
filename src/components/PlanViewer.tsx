@@ -148,24 +148,28 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
   };
 
   const handlePlanClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!containerRef.current || !totalPages) return;
+    if (!containerRef.current || !totalPages || !contentRef.current) return;
 
     const rect = getContentRect();
     if (!rect) return;
 
     const { positionX, positionY, scale } = currentTransform;
 
-    // Calculate click position relative to the container
-    const mouseX = e.clientX - rect.containerLeft;
-    const mouseY = e.clientY - rect.containerTop;
+    // Get the actual content element's bounding rectangle
+    const contentRect = contentRef.current.getBoundingClientRect();
 
-    // Adjust for transform (pan and scale)
-    const transformedX = (mouseX - positionX) / scale;
-    const transformedY = (mouseY - positionY) / scale;
+    // Calculate click position relative to the content element (not container)
+    const mouseX = e.clientX - contentRect.left;
+    const mouseY = e.clientY - contentRect.top;
 
-    // Relative to image top-left
-    const imageX = transformedX - rect.left;
-    const imageY = transformedY - rect.top;
+    // The content is centered within the transform wrapper, so we need to account for that
+    // Since the image/canvas is centered, calculate its actual position
+    const imageLeft = (contentRect.width - rect.width) / 2;
+    const imageTop = (contentRect.height - rect.height) / 2;
+
+    // Calculate position relative to the image/canvas itself
+    const imageX = mouseX - imageLeft;
+    const imageY = mouseY - imageTop;
 
     // Normalize to 0-1
     const normalizedX = imageX / rect.width;
@@ -178,19 +182,22 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!containerRef.current) return;
+    if (!containerRef.current || !contentRef.current) return;
 
     const rect = getContentRect();
     if (!rect) return;
 
-    const { positionX, positionY, scale } = currentTransform;
+    const contentRect = contentRef.current.getBoundingClientRect();
 
-    const mouseX = e.clientX - rect.containerLeft;
-    const mouseY = e.clientY - rect.containerTop;
-    const transformedX = (mouseX - positionX) / scale;
-    const transformedY = (mouseY - positionY) / scale;
-    const imageX = transformedX - rect.left;
-    const imageY = transformedY - rect.top;
+    const mouseX = e.clientX - contentRect.left;
+    const mouseY = e.clientY - contentRect.top;
+
+    const imageLeft = (contentRect.width - rect.width) / 2;
+    const imageTop = (contentRect.height - rect.height) / 2;
+
+    const imageX = mouseX - imageLeft;
+    const imageY = mouseY - imageTop;
+
     const normalizedX = imageX / rect.width;
     const normalizedY = imageY / rect.height;
 

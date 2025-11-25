@@ -9,6 +9,7 @@ import { SnagManager } from '../components/project/SnagManager';
 import { EditProjectModal } from '../components/project/EditProjectModal';
 import { DeleteProjectModal } from '../components/project/DeleteProjectModal';
 import { useAuth } from '../hooks/useAuth';
+import { useSyncEffect } from '../hooks/useSyncEffect';
 
 export const ProjectDetail: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>();
@@ -60,6 +61,12 @@ export const ProjectDetail: React.FC = () => {
     fetchProject();
     fetchSnags();
   }, [projectId]);
+
+  // Auto-sync and refresh when coming back online
+  useSyncEffect(() => {
+    console.log('Syncing complete, refreshing snags...');
+    fetchSnags();
+  });
 
   const [contractors, setContractors] = useState<any[]>([]);
 

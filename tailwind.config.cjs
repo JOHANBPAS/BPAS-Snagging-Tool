@@ -23,6 +23,10 @@ module.exports = {
           yellow: '#eba000',
         },
       },
+      screens: {
+        // Increase lg breakpoint so iPads in landscape (up to ~1194px) use mobile/tablet layout
+        'lg': '1280px',
+      },
     },
   },
   plugins: [],

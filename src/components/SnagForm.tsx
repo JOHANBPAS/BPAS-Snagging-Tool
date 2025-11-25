@@ -6,7 +6,7 @@ import { useAuth } from '../hooks/useAuth';
 import { normalizeUuid } from '../lib/format';
 import { resizeImage } from '../lib/imageUtils';
 import { useOfflineStatus } from '../hooks/useOfflineStatus';
-import { queueMutation } from '../services/offlineStorage';
+import { queueMutation, queuePhoto } from '../services/offlineStorage';
 
 import { ImageAnnotator } from './ImageAnnotator';
 
@@ -44,6 +44,13 @@ export const SnagForm: React.FC<Props> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [customValues, setCustomValues] = useState<Record<string, any>>({});
+
+  // Helper function to get today's date in YYYY-MM-DD format
+  const getTodayDate = () => {
+    const today = new Date();
+    return today.toISOString().split('T')[0];
+  };
+
   const [form, setForm] = useState<Partial<Snag>>({
     title: '',
     description: '',
@@ -51,7 +58,7 @@ export const SnagForm: React.FC<Props> = ({
     status: 'open',
     location: '',
     category: '',
-    due_date: '',
+    due_date: getTodayDate(), // Auto-populate with today's date
     assigned_to: ''
   });
   const [pendingPhotos, setPendingPhotos] = useState<{ file: File; preview: string }[]>([]);
@@ -149,8 +156,8 @@ export const SnagForm: React.FC<Props> = ({
       let result: Snag | null = null;
 
       if (isOffline) {
-        // Offline handling
-        const offlineId = `offline-${Date.now()}`;
+        // Offline handling with proper ID generation
+        const offlineId = `offline-${crypto.randomUUID()}`;
         const timestamp = new Date().toISOString();
 
         const payload = {
@@ -162,7 +169,6 @@ export const SnagForm: React.FC<Props> = ({
           plan_y: effectiveCoords.y,
           plan_page: effectiveCoords.page,
           plan_id: effectiveCoords.planId,
-          // Add temporary fields for optimistic UI if needed, or just raw payload
         };
 
         if (isEditing && initialSnag) {
@@ -171,18 +177,23 @@ export const SnagForm: React.FC<Props> = ({
           result = { ...initialSnag, ...payload } as Snag;
           onUpdated?.(result);
         } else {
-          // For new snags, we can't easily generate a real UUID offline that matches Supabase's default.
-          // We'll queue it and the UI will just have to wait or show a placeholder.
-          // For now, we'll just queue it and close the form.
-          await queueMutation('snags', 'INSERT', payload);
-          onCreated?.({ ...payload, id: offlineId, created_at: timestamp, status: 'open' } as Snag);
-        }
+          // Queue the snag creation with offline ID tracking
+          await queueMutation('snags', 'INSERT', payload, offlineId);
 
-        // Offline photos handling is complex. For now, we might skip photos or warn user.
-        if (pendingPhotos.length > 0) {
-          // Ideally we'd cache these photos in IDB too.
-          // For this iteration, we'll warn that photos will be uploaded later or skipped.
-          console.warn('Offline photo upload not fully supported yet.');
+          // Store photos in IndexedDB
+          for (const { file } of pendingPhotos) {
+            await queuePhoto(offlineId, file, file.name);
+          }
+
+          // Create optimistic snag for UI
+          onCreated?.({
+            ...payload,
+            id: offlineId,
+            created_at: timestamp,
+            status: 'open',
+            priority: payload.priority || 'medium',
+            title: payload.title || '',
+          } as Snag);
         }
 
       } else {
@@ -232,7 +243,16 @@ export const SnagForm: React.FC<Props> = ({
           }
           await uploadPhotos(result.id);
           onCreated?.(result);
-          setForm({ title: '', description: '', priority: 'medium', status: 'open' });
+          setForm({
+            title: '',
+            description: '',
+            priority: 'medium',
+            status: 'open',
+            location: '',
+            category: '',
+            due_date: getTodayDate(), // Reset to today's date for next snag
+            assigned_to: ''
+          });
           setCustomValues({});
         }
       }
