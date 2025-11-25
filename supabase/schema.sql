@@ -35,6 +35,10 @@ create table if not exists public.projects (
   end_date date,
   status text check (status in ('active','completed','archived')) default 'active',
   plan_image_url text,
+  project_number text,
+  inspection_type text,
+  inspection_scope text,
+  inspection_description text,
   created_by uuid references public.profiles(id),
   checklist_template_id uuid references public.checklist_templates(id),
   created_at timestamptz default now()
