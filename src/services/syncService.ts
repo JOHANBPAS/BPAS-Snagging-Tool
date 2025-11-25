@@ -66,6 +66,28 @@ export const syncMutations = async () => {
 const uploadPendingPhotos = async (snagId: string) => {
     const photos = await getPendingPhotos(snagId);
 
+    if (photos.length === 0) return;
+
+    // Check if photos already exist for this snag to prevent duplicates
+    const { data: existingPhotos } = await supabase
+        .from('snag_photos')
+        .select('photo_url')
+        .eq('snag_id', snagId);
+
+    const existingCount = existingPhotos?.length || 0;
+
+    // If we already have photos for this snag, skip upload (they were already uploaded)
+    if (existingCount >= photos.length) {
+        console.log(`Snag ${snagId} already has ${existingCount} photos, skipping upload`);
+        // Clear the pending photos since they're already uploaded
+        for (const photo of photos) {
+            if (photo.id) {
+                await markPhotoSynced(photo.id);
+            }
+        }
+        return;
+    }
+
     for (const photo of photos) {
         try {
             const resizedBlob = await resizeImage(photo.blob as File);

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useOfflineStatus } from './useOfflineStatus';
 import { syncMutations } from '../services/syncService';
 
@@ -8,13 +8,21 @@ import { syncMutations } from '../services/syncService';
  */
 export const useSyncEffect = (onSyncComplete?: () => void | Promise<void>) => {
     const isOffline = useOfflineStatus();
+    const prevOfflineRef = useRef(isOffline);
+    const hasSyncedRef = useRef(false);
 
     useEffect(() => {
-        let syncTimeout: NodeJS.Timeout;
+        // Only sync when transitioning from offline to online
+        const wasOffline = prevOfflineRef.current;
+        const isNowOnline = !isOffline;
 
-        const handleOnline = async () => {
-            // Wait a bit for connection to stabilize
-            syncTimeout = setTimeout(async () => {
+        if (wasOffline && isNowOnline && !hasSyncedRef.current) {
+            hasSyncedRef.current = true;
+
+            const handleSync = async () => {
+                // Wait a bit for connection to stabilize
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
                 try {
                     console.log('Connection restored, syncing offline mutations...');
                     await syncMutations();
@@ -26,19 +34,18 @@ export const useSyncEffect = (onSyncComplete?: () => void | Promise<void>) => {
                     }
                 } catch (error) {
                     console.error('Failed to sync mutations:', error);
+                } finally {
+                    // Reset flag after a delay to  allow syncing again if needed
+                    setTimeout(() => {
+                        hasSyncedRef.current = false;
+                    }, 5000);
                 }
-            }, 1000);
-        };
+            };
 
-        // Trigger sync when going from offline to online
-        if (!isOffline) {
-            handleOnline();
+            handleSync();
         }
 
-        return () => {
-            if (syncTimeout) {
-                clearTimeout(syncTimeout);
-            }
-        };
+        // Update previous offline state
+        prevOfflineRef.current = isOffline;
     }, [isOffline, onSyncComplete]);
 };

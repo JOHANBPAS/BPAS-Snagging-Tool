@@ -148,32 +148,25 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
   };
 
   const handlePlanClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!containerRef.current || !totalPages || !contentRef.current) return;
+    if (!containerRef.current || !totalPages) return;
 
-    const rect = getContentRect();
-    if (!rect) return;
+    // Get the actual rendered image or canvas element
+    const imageElement = isPdf
+      ? canvasRef.current
+      : contentRef.current?.querySelector('img');
 
-    const { positionX, positionY, scale } = currentTransform;
+    if (!imageElement) return;
 
-    // Get the actual content element's bounding rectangle
-    const contentRect = contentRef.current.getBoundingClientRect();
+    // Get the bounding rectangle of the actual rendered image/canvas
+    const imageRect = imageElement.getBoundingClientRect();
 
-    // Calculate click position relative to the content element (not container)
-    const mouseX = e.clientX - contentRect.left;
-    const mouseY = e.clientY - contentRect.top;
+    // Calculate click position relative to the image element
+    const mouseX = e.clientX - imageRect.left;
+    const mouseY = e.clientY - imageRect.top;
 
-    // The content is centered within the transform wrapper, so we need to account for that
-    // Since the image/canvas is centered, calculate its actual position
-    const imageLeft = (contentRect.width - rect.width) / 2;
-    const imageTop = (contentRect.height - rect.height) / 2;
-
-    // Calculate position relative to the image/canvas itself
-    const imageX = mouseX - imageLeft;
-    const imageY = mouseY - imageTop;
-
-    // Normalize to 0-1
-    const normalizedX = imageX / rect.width;
-    const normalizedY = imageY / rect.height;
+    // Normalize to 0-1 based on the actual image dimensions
+    const normalizedX = mouseX / imageRect.width;
+    const normalizedY = mouseY / imageRect.height;
 
     // Check bounds
     if (normalizedX >= 0 && normalizedX <= 1 && normalizedY >= 0 && normalizedY <= 1) {
@@ -182,24 +175,22 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!containerRef.current || !contentRef.current) return;
+    if (!containerRef.current) return;
 
-    const rect = getContentRect();
-    if (!rect) return;
+    // Get the actual rendered image or canvas element
+    const imageElement = isPdf
+      ? canvasRef.current
+      : contentRef.current?.querySelector('img');
 
-    const contentRect = contentRef.current.getBoundingClientRect();
+    if (!imageElement) return;
 
-    const mouseX = e.clientX - contentRect.left;
-    const mouseY = e.clientY - contentRect.top;
+    const imageRect = imageElement.getBoundingClientRect();
 
-    const imageLeft = (contentRect.width - rect.width) / 2;
-    const imageTop = (contentRect.height - rect.height) / 2;
+    const mouseX = e.clientX - imageRect.left;
+    const mouseY = e.clientY - imageRect.top;
 
-    const imageX = mouseX - imageLeft;
-    const imageY = mouseY - imageTop;
-
-    const normalizedX = imageX / rect.width;
-    const normalizedY = imageY / rect.height;
+    const normalizedX = mouseX / imageRect.width;
+    const normalizedY = mouseY / imageRect.height;
 
     if (normalizedX >= 0 && normalizedX <= 1 && normalizedY >= 0 && normalizedY <= 1) {
       setHovered({ x: normalizedX, y: normalizedY });
