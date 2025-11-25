@@ -148,52 +148,87 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
   };
 
   const handlePlanClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!containerRef.current || !totalPages) return;
+    if (!containerRef.current || !totalPages || !planDimensions) return;
 
-    // Get the actual rendered image or canvas element
-    const imageElement = isPdf
-      ? canvasRef.current
-      : contentRef.current?.querySelector('img');
+    const container = containerRef.current.getBoundingClientRect();
+    const { positionX, positionY, scale } = currentTransform;
 
-    if (!imageElement) return;
+    // Get click position relative to container
+    const clickX = e.clientX - container.left;
+    const clickY = e.clientY - container.top;
 
-    // Get the bounding rectangle of the actual rendered image/canvas
-    const imageRect = imageElement.getBoundingClientRect();
+    // Apply inverse transform to get the position in the original (unscaled, unpanned) coordinate space
+    const planX = (clickX - positionX) / scale;
+    const planY = (clickY - positionY) / scale;
 
-    // Calculate click position relative to the image element
-    const mouseX = e.clientX - imageRect.left;
-    const mouseY = e.clientY - imageRect.top;
+    // The plan is centered in the container, calculate the plan's render dimensions
+    const containerAspect = container.width / container.height;
+    const planAspect = planDimensions.width / planDimensions.height;
 
-    // Normalize to 0-1 based on the actual image dimensions
-    const normalizedX = mouseX / imageRect.width;
-    const normalizedY = mouseY / imageRect.height;
+    let renderedWidth, renderedHeight, offsetX, offsetY;
 
-    // Check bounds
-    if (normalizedX >= 0 && normalizedX <= 1 && normalizedY >= 0 && normalizedY <= 1) {
-      onSelectLocation({ x: Number(normalizedX.toFixed(3)), y: Number(normalizedY.toFixed(3)), page: currentPageNumber });
+    if (containerAspect > planAspect) {
+      // Container wider - plan fits to height
+      renderedHeight = container.height;
+      renderedWidth = renderedHeight * planAspect;
+      offsetY = 0;
+      offsetX = (container.width - renderedWidth) / 2;
+    } else {
+      // Container taller - plan fits to width
+      renderedWidth = container.width;
+      renderedHeight = renderedWidth / planAspect;
+      offsetX = 0;
+      offsetY = (container.height - renderedHeight) / 2;
+    }
+
+    // Calculate position relative to the rendered plan (accounting for centering offsets)
+    const relX = (planX - offsetX) / renderedWidth;
+    const relY = (planY - offsetY) / renderedHeight;
+
+    // Check bounds and save
+    if (relX >= 0 && relX <= 1 && relY >= 0 && relY <= 1) {
+      onSelectLocation({
+        x: Number(relX.toFixed(3)),
+        y: Number(relY.toFixed(3)),
+        page: currentPageNumber
+      });
     }
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!containerRef.current) return;
+    if (!containerRef.current || !planDimensions) return;
 
-    // Get the actual rendered image or canvas element
-    const imageElement = isPdf
-      ? canvasRef.current
-      : contentRef.current?.querySelector('img');
+    const container = containerRef.current.getBoundingClientRect();
+    const { positionX, positionY, scale } = currentTransform;
 
-    if (!imageElement) return;
+    const clickX = e.clientX - container.left;
+    const clickY = e.clientY - container.top;
 
-    const imageRect = imageElement.getBoundingClientRect();
+    const planX = (clickX - positionX) / scale;
+    const planY = (clickY - positionY) / scale;
 
-    const mouseX = e.clientX - imageRect.left;
-    const mouseY = e.clientY - imageRect.top;
+    const containerAspect = container.width / container.height;
+    const planAspect = planDimensions.width / planDimensions.height;
 
-    const normalizedX = mouseX / imageRect.width;
-    const normalizedY = mouseY / imageRect.height;
+    let renderedWidth, renderedHeight, offsetX, offsetY;
 
-    if (normalizedX >= 0 && normalizedX <= 1 && normalizedY >= 0 && normalizedY <= 1) {
-      setHovered({ x: normalizedX, y: normalizedY });
+    if (containerAspect > planAspect) {
+      renderedHeight = container.height;
+      renderedWidth = renderedHeight * planAspect;
+      offsetY = 0;
+      offsetX = (container.width - renderedWidth) / 2;
+    } else {
+      renderedWidth = container.width;
+      renderedHeight = renderedWidth / planAspect;
+      offsetX = 0;
+      offsetY = (container.height - renderedHeight) / 2;
+    }
+
+    const relX = (planX - offsetX) / renderedWidth;
+    const relY = (planY - offsetY) / renderedHeight;
+
+    if (relX >= 0 && relX <= 1 && relY >= 0 && relY <= 1) {
+      setHovered({ x: relX, y: relY });
     } else {
       setHovered(null);
     }

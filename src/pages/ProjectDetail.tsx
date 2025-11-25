@@ -49,7 +49,10 @@ export const ProjectDetail: React.FC = () => {
       .eq('project_id', projectId)
       .order('created_at', { ascending: true }); // Ensure stable order
 
-    const snagsWithId = (data as Snag[] || []).map((s, index) => ({
+    //Filter out any snags with offline IDs (these are temporary and should be replaced by real ones)
+    const realSnags = (data as Snag[] || []).filter(s => !s.id.startsWith('offline-'));
+
+    const snagsWithId = realSnags.map((s, index) => ({
       ...s,
       friendly_id: index + 1
     }));
