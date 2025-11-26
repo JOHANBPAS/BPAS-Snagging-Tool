@@ -372,8 +372,12 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
                       {/* Render Markers Overlay - Positioned exactly over the image content */}
                       {contentRect && (
                         <div
-                          className="absolute inset-0"
+                          className="absolute"
                           style={{
+                            width: contentRect.width,
+                            height: contentRect.height,
+                            left: contentRect.left,
+                            top: contentRect.top,
                             pointerEvents: 'none', // Let clicks pass through to container
                           }}
                         >

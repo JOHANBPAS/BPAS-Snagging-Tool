@@ -62,6 +62,7 @@ export const SnagForm: React.FC<Props> = ({
     assigned_to: ''
   });
   const [pendingPhotos, setPendingPhotos] = useState<{ file: File; preview: string }[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [annotatingPhoto, setAnnotatingPhoto] = useState<{ index: number; src: string } | null>(null);
   const isEditing = Boolean(initialSnag);
 
@@ -141,17 +142,17 @@ export const SnagForm: React.FC<Props> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) {
-      setError('You must be signed in to manage snags.');
-      return;
-    }
-    if (!effectiveCoords) {
-      setError('Please place this snag on the floor plan before saving.');
-      return;
-    }
-    setLoading(true);
-    setError(null);
+    if (isSubmitting) return;
+
     try {
+      setIsSubmitting(true);
+      if (!user) throw new Error('You must be signed in to manage snags.');
+      if (!effectiveCoords) {
+        throw new Error('Please place this snag on the floor plan before saving.');
+      }
+      setLoading(true);
+      setError(null);
+
       const assignedUuid = normalizeUuid(form.assigned_to);
       let result: Snag | null = null;
 
@@ -263,9 +264,12 @@ export const SnagForm: React.FC<Props> = ({
         onCancel?.();
       }
     } catch (err: any) {
-      setError(err.message);
+      console.error('Error saving snag:', err);
+      alert(err.message || 'Failed to save snag');
+    } finally {
+      setLoading(false);
+      setIsSubmitting(false);
     }
-    setLoading(false);
   };
 
   return (
@@ -282,22 +286,25 @@ export const SnagForm: React.FC<Props> = ({
             <p className="text-xs font-raleway text-rose-600">Tap the floor plan to place this snag before saving.</p>
           )}
         </div>
-        <button
-          type="submit"
-          disabled={!canSave || loading}
-          className="btn-primary disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {loading ? 'Saving...' : isEditing ? 'Update snag' : 'Save'}
-        </button>
-        {onCancel && (
+        <div className="flex justify-end gap-3 pt-4">
+          {onCancel && (
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={isSubmitting}
+              className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          )}
           <button
-            type="button"
-            onClick={onCancel}
-            className="btn-secondary ml-2 disabled:cursor-not-allowed disabled:opacity-60"
+            type="submit"
+            disabled={isSubmitting || !canSave}
+            className="rounded-lg bg-bpas-yellow px-4 py-2 text-sm font-bold text-white shadow-md hover:bg-bpas-dark disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Cancel
+            {isSubmitting ? 'Saving...' : (isEditing ? 'Update Snag' : 'Create Snag')}
           </button>
-        )}
+        </div>
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="grid gap-3 sm:grid-cols-2">
