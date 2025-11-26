@@ -391,8 +391,22 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
         verified: [37, 99, 235],
     };
 
-    // Reset Y for the new portrait page
-    let listStartY = margin + 100; // Start lower to accommodate letterhead header
+    // Determine start Y for the list
+    let listStartY = currentY + 40;
+
+    // If we added floor plans (which add pages), we need to reset for a new page
+    if (floorPlans.length > 0) {
+        // We are on a new page (portrait) after the floor plans
+        listStartY = margin + 100;
+    } else {
+        // We are still on the first page (or subsequent if description was long)
+        // Check if we have enough space for the header
+        if (listStartY > pageHeight - 100) {
+            doc.addPage();
+            drawLetterhead(doc);
+            listStartY = margin + 100;
+        }
+    }
 
     doc.setFontSize(16);
     doc.setTextColor(brandColors.black);
@@ -420,7 +434,7 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                 }
             }
         },
-        margin: { top: 100, bottom: 80, left: margin, right: margin }, // Increased bottom margin
+        margin: { top: 100, bottom: 80, left: margin, right: margin },
         didDrawPage: () => {
             drawLetterhead(doc);
         },
@@ -432,35 +446,31 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
     if (sortedSnags.length) {
         doc.addPage();
         drawLetterhead(doc);
-        let y = 120; // Increased top margin for header safety
+        let y = 120;
         doc.setFontSize(16);
         doc.setTextColor(brandColors.black);
         doc.text('Snag photos', margin, y);
-        y += 30; // Increased spacing after header
+        y += 30;
 
         const ensureSpace = (heightNeeded: number) => {
-            if (y + heightNeeded > pageHeight - 80) { // Increased bottom margin safety
+            if (y + heightNeeded > pageHeight - 80) {
                 doc.addPage();
                 drawLetterhead(doc);
-                y = 140; // Increased top margin for new pages to avoid header overlap
+                y = 140;
             }
         };
 
-        // Batch process snags to fetch photos in parallel chunks
         const BATCH_SIZE = 5;
         for (let i = 0; i < sortedSnags.length; i += BATCH_SIZE) {
             const batch = sortedSnags.slice(i, i + BATCH_SIZE);
 
-            // Fetch photos for the batch in parallel
             const batchResults = await Promise.all(batch.map(async (snag) => {
                 onProgress?.(`Fetching photos for snag ${snagIndexMap.get(snag.id)}...`);
 
-                // JIT Photo Loading
                 const { data: photoRows } = await supabase.from('snag_photos').select('photo_url').eq('snag_id', snag.id);
                 const photos: string[] = [];
 
                 if (photoRows && photoRows.length > 0) {
-                    // Fetch and downscale photos in parallel
                     const photoPromises = photoRows.map(async (row) => {
                         const imgData = await toDataUrl(row.photo_url);
                         if (imgData) {
@@ -472,10 +482,8 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                     photos.push(...(results.filter(Boolean) as string[]));
                 }
 
-                // Generate Location Snippet
                 let locationSnippet: string | null = null;
                 if (snag.plan_x != null && snag.plan_y != null) {
-                    // Find correct plan image
                     const plan = floorPlans.find(p => {
                         const matchesPlan = snag.plan_id ? snag.plan_id === p.planId : (p.planId === 'legacy');
                         return matchesPlan && p.page === (snag.plan_page ?? 1);
@@ -489,21 +497,15 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                 return { snag, photos, locationSnippet };
             }));
 
-            // Render the batch to PDF sequentially (jsPDF is not thread-safe/async in this way)
             for (const { snag, photos, locationSnippet } of batchResults) {
                 const globalIndex = snagIndexMap.get(snag.id) || 0;
 
-                // Calculate height needed
-                // Title + Details = ~60pt
-                // Photos/Snippet row height = ~imgHeight + 20pt
                 const imgWidth = (pageWidth - margin * 2 - 16) / 2;
                 const imgHeight = imgWidth * 0.6;
 
                 const hasPhotos = photos.length > 0;
                 const hasSnippet = !!locationSnippet;
 
-                // Calculate rows needed for photos + snippet
-                // We will put snippet as the first item if it exists
                 const totalImages = (hasSnippet ? 1 : 0) + photos.length;
                 const rows = Math.ceil(totalImages / 2);
                 const imagesHeight = rows * (imgHeight + 20);
@@ -532,35 +534,19 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                 if (totalImages > 0) {
                     let currentImageIdx = 0;
 
-                    // Draw Snippet first if exists
                     if (locationSnippet) {
                         doc.addImage(locationSnippet, 'JPEG', margin, y, imgWidth, imgHeight);
-                        // Add label "Location"
                         doc.setFontSize(8);
                         doc.setTextColor(brandColors.grey);
                         doc.text('Location on plan', margin + 5, y + imgHeight - 5);
                         currentImageIdx++;
                     }
 
-                    // Draw Photos
                     photos.forEach((photo) => {
                         const col = currentImageIdx % 2;
                         const row = Math.floor(currentImageIdx / 2);
-                        // If we moved to a new row (and it's not the very first image which is at y), add height
-                        // Actually we just calculate x/y based on index
-                        // But wait, if we wrap pages inside this loop it gets complex.
-                        // We already called ensureSpace for the whole block, so we assume it fits.
-
-                        // However, if we have MANY photos, it might not fit.
-                        // For now, let's assume max 4-6 photos per snag which fits on a page.
-                        // If we need robust multi-page split for a single snag's photos, that's a bigger refactor.
-
                         const x = margin + col * (imgWidth + 16);
-                        // If snippet was first (idx 0), it's at y.
-                        // If snippet was first, photo 1 is at idx 1 (col 1, row 0) -> same y.
-                        // Photo 2 is at idx 2 (col 0, row 1) -> y + imgHeight + 16.
-
-                        const rowY = y + Math.floor(currentImageIdx / 2) * (imgHeight + 16);
+                        const rowY = y + row * (imgHeight + 16);
 
                         doc.addImage(photo, 'JPEG', x, rowY, imgWidth, imgHeight);
                         currentImageIdx++;
@@ -573,8 +559,6 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                 }
                 y += 10;
             }
-
-            // Yield to main thread to keep UI responsive
             await yieldToMain();
         }
     }
@@ -594,7 +578,6 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
 
     const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, ImageRun, Header, Footer, AlignmentType, PageBreak } = await import('docx');
 
-    // Sort snags (same logic as PDF)
     const sortedSnags = [...snags].sort((a, b) => {
         if (a.plan_id !== b.plan_id) return (a.plan_id || '').localeCompare(b.plan_id || '');
         const pageA = a.plan_page ?? 999;
@@ -608,7 +591,6 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
 
     const children: any[] = [];
 
-    // Title Page
     children.push(
         new Paragraph({
             text: "BPAS Snagging Report",
@@ -651,7 +633,6 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
         })
     );
 
-    // Floor Plans
     onProgress?.('Processing floor plans...');
     await yieldToMain();
     const floorPlans = await getFloorPlans(project, sortedSnags);
@@ -660,8 +641,6 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
         children.push(new Paragraph({ text: "Floor Plans", heading: "Heading1", pageBreakBefore: true }));
 
         for (const plan of floorPlans) {
-            // Draw pins on the plan image using a canvas (similar to PDF)
-            // We reuse the logic but return a blob/buffer for docx
             const img = new Image();
             img.src = plan.image;
             await new Promise((resolve) => (img.onload = resolve));
@@ -673,7 +652,6 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
             if (ctx) {
                 ctx.drawImage(img, 0, 0);
 
-                // Draw pins
                 const pinsForFloor = sortedSnags.filter((snag) => {
                     const matchesPlan = snag.plan_id ? snag.plan_id === plan.planId : (plan.planId === 'legacy');
                     return matchesPlan && (snag.plan_page ?? 1) === plan.page;
@@ -727,7 +705,6 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
         }
     }
 
-    // Snag List Table
     onProgress?.('Generating snag list...');
     await yieldToMain();
     children.push(new Paragraph({ text: "Snag List", heading: "Heading1", pageBreakBefore: true }));
@@ -761,7 +738,6 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
         width: { size: 100, type: WidthType.PERCENTAGE },
     }));
 
-    // Snag Photos
     onProgress?.('Processing photos...');
     await yieldToMain();
     children.push(new Paragraph({ text: "Snag Photos", heading: "Heading1", pageBreakBefore: true }));
@@ -834,7 +810,6 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
             });
 
             if (images.length > 0) {
-                // Add images in a paragraph (simple flow)
                 children.push(new Paragraph({ children: images }));
             } else {
                 children.push(new Paragraph({ text: "No photos attached.", style: "Italic" }));
