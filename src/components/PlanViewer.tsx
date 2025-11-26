@@ -121,32 +121,6 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
     render();
   }, [pdfDoc, currentPage]);
 
-  // Calculate the actual rendered rect of the plan within the container
-  const getContentRect = () => {
-    if (!containerRef.current || !planDimensions) return null;
-    const container = containerRef.current.getBoundingClientRect();
-    const containerAspect = container.width / container.height;
-    const planAspect = planDimensions.width / planDimensions.height;
-
-    let width, height, left, top;
-
-    if (containerAspect > planAspect) {
-      // Container is wider than plan -> plan fits height
-      height = container.height;
-      width = height * planAspect;
-      top = 0;
-      left = (container.width - width) / 2;
-    } else {
-      // Container is taller than plan -> plan fits width
-      width = container.width;
-      height = width / planAspect;
-      left = 0;
-      top = (container.height - height) / 2;
-    }
-
-    return { width, height, left, top, containerLeft: container.left, containerTop: container.top };
-  };
-
   const handlePlanClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!containerRef.current || !totalPages) return;
 
@@ -204,7 +178,7 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
     }
   };
 
-  const contentRect = getContentRect();
+
 
   return (
     <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -340,32 +314,26 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
                       )}
 
                       {/* Render Markers Overlay - Positioned exactly over the image content */}
-                      {contentRect && (
-                        <div
-                          className="absolute"
-                          style={{
-                            width: contentRect.width,
-                            height: contentRect.height,
-                            left: contentRect.left,
-                            top: contentRect.top,
-                            pointerEvents: 'none', // Let clicks pass through to container
-                          }}
-                        >
-                          {markers.map((marker) => (
-                            <div
-                              key={marker.id}
-                              className="absolute flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-rose-500 text-xs font-bold text-white shadow-md border-2 border-white"
-                              style={{
-                                left: `${marker.x * 100}%`,
-                                top: `${marker.y * 100}%`,
-                              }}
-                              title={marker.title}
-                            >
-                              {marker.index}
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                      <div
+                        className="absolute inset-0"
+                        style={{
+                          pointerEvents: 'none', // Let clicks pass through to container
+                        }}
+                      >
+                        {markers.map((marker) => (
+                          <div
+                            key={marker.id}
+                            className="absolute flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-rose-500 text-xs font-bold text-white shadow-md border-2 border-white"
+                            style={{
+                              left: `${marker.x * 100}%`,
+                              top: `${marker.y * 100}%`,
+                            }}
+                            title={marker.title}
+                          >
+                            {marker.index}
+                          </div>
+                        ))}
+                      </div>
 
                       {hovered && (
                         <div className="absolute bottom-2 right-2 rounded-lg bg-black/70 px-2 py-1 text-xs text-white z-10 pointer-events-none">
