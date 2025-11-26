@@ -95,26 +95,41 @@ const getFloorPlans = async (project: Project, snags: Snag[]): Promise<Array<{ p
             const planResults: Array<{ planId: string; name: string; page: number; image: string }> = [];
 
             if (plan.url.toLowerCase().endsWith('.pdf')) {
-                const { GlobalWorkerOptions, getDocument } = await import('pdfjs-dist/legacy/build/pdf');
-                const workerSrc = new URL('pdfjs-dist/legacy/build/pdf.worker.min.mjs', import.meta.url).toString();
-                GlobalWorkerOptions.workerSrc = workerSrc;
                 try {
+                    // Use standard import for v4.x
+                    const pdfJS = await import('pdfjs-dist');
+
+                    // Set worker source
+                    if (!pdfJS.GlobalWorkerOptions.workerSrc) {
+                        const workerSrc = new URL(
+                            'pdfjs-dist/build/pdf.worker.min.mjs',
+                            import.meta.url
+                        ).toString();
+                        pdfJS.GlobalWorkerOptions.workerSrc = workerSrc;
+                    }
+
                     const response = await fetch(plan.url);
-                    if (!response.ok) return [];
+                    if (!response.ok) {
+                        console.error(`Failed to fetch PDF for plan ${plan.name}: ${response.statusText}`);
+                        return [];
+                    }
+
                     const buffer = await response.arrayBuffer();
-                    const pdf = await getDocument({ data: buffer }).promise;
+                    const pdf = await pdfJS.getDocument({ data: buffer }).promise;
 
                     // Only process pages that are actually used
                     for (let pageIndex = 1; pageIndex <= pdf.numPages; pageIndex++) {
                         if (!requiredPages.has(pageIndex)) continue;
 
                         const page = await pdf.getPage(pageIndex);
-                        const viewport = page.getViewport({ scale: 1.3 });
+                        const viewport = page.getViewport({ scale: 1.5 }); // Increased scale for better quality
                         const canvas = document.createElement('canvas');
                         const context = canvas.getContext('2d');
                         if (!context) continue;
+
                         canvas.width = viewport.width;
                         canvas.height = viewport.height;
+
                         await page.render({ canvasContext: context, viewport }).promise;
                         const image = canvas.toDataURL('image/jpeg', 0.85);
                         planResults.push({ planId: plan.id, name: plan.name, page: pageIndex, image });
@@ -145,19 +160,27 @@ const getFloorPlans = async (project: Project, snags: Snag[]): Promise<Array<{ p
             const url = project.plan_image_url;
 
             if (url.toLowerCase().endsWith('.pdf')) {
-                const { GlobalWorkerOptions, getDocument } = await import('pdfjs-dist/legacy/build/pdf');
-                const workerSrc = new URL('pdfjs-dist/legacy/build/pdf.worker.min.mjs', import.meta.url).toString();
-                GlobalWorkerOptions.workerSrc = workerSrc;
                 try {
+                    const pdfJS = await import('pdfjs-dist');
+
+                    if (!pdfJS.GlobalWorkerOptions.workerSrc) {
+                        const workerSrc = new URL(
+                            'pdfjs-dist/build/pdf.worker.min.mjs',
+                            import.meta.url
+                        ).toString();
+                        pdfJS.GlobalWorkerOptions.workerSrc = workerSrc;
+                    }
+
                     const response = await fetch(url);
                     if (response.ok) {
                         const buffer = await response.arrayBuffer();
-                        const pdf = await getDocument({ data: buffer }).promise;
+                        const pdf = await pdfJS.getDocument({ data: buffer }).promise;
+
                         for (let pageIndex = 1; pageIndex <= pdf.numPages; pageIndex++) {
                             if (!requiredPages.has(pageIndex)) continue;
 
                             const page = await pdf.getPage(pageIndex);
-                            const viewport = page.getViewport({ scale: 1.3 });
+                            const viewport = page.getViewport({ scale: 1.5 });
                             const canvas = document.createElement('canvas');
                             const context = canvas.getContext('2d');
                             if (context) {
@@ -446,7 +469,7 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
     if (sortedSnags.length) {
         doc.addPage();
         drawLetterhead(doc);
-        let y = 120;
+        let y = 180; // Increased to match contentStartY to avoid header overlap
         doc.setFontSize(16);
         doc.setTextColor(brandColors.black);
         doc.text('Snag photos', margin, y);
@@ -456,7 +479,7 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
             if (y + heightNeeded > pageHeight - 80) {
                 doc.addPage();
                 drawLetterhead(doc);
-                y = 140;
+                y = 180; // Increased to match contentStartY
             }
         };
 
