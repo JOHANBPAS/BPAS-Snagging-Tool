@@ -57,6 +57,9 @@ const downscaleImage = async (dataUrl: string, maxSize = 1600, quality = 0.78): 
     });
 
 const getFloorPlans = async (project: Project, snags: Snag[], onProgress?: (message: string) => void): Promise<Array<{ planId: string; name: string; page: number; image: string }>> => {
+    console.log('getFloorPlans started for project:', project.name, project.id);
+    console.log('Project plan_image_url:', project.plan_image_url);
+
     // 1. Identify relevant plans and pages from snags
     const relevantMap = new Map<string, Set<number>>();
 
@@ -70,11 +73,18 @@ const getFloorPlans = async (project: Project, snags: Snag[], onProgress?: (mess
                 relevantMap.set(planId, new Set());
             }
             relevantMap.get(planId)?.add(page);
+        } else {
+            console.log('Snag skipped (no coords):', snag.title, snag.id, snag.plan_x, snag.plan_y);
         }
     });
 
+    console.log('relevantMap keys:', Array.from(relevantMap.keys()));
+
     // If no snags are placed, return empty
-    if (relevantMap.size === 0) return [];
+    if (relevantMap.size === 0) {
+        console.log('No relevant plans found from snags.');
+        return [];
+    }
 
     // 2. Try fetching from project_plans table
     const { data: plans } = await supabase
@@ -83,13 +93,18 @@ const getFloorPlans = async (project: Project, snags: Snag[], onProgress?: (mess
         .eq('project_id', project.id)
         .order('order', { ascending: true });
 
+    console.log('Fetched project_plans:', plans?.length, plans);
+
     const results: Array<{ planId: string; name: string; page: number; image: string }> = [];
 
     if (plans && plans.length > 0) {
         // Process plans in parallel
         const planPromises = plans.map(async (plan) => {
             // Skip if this plan is not used by any snag
-            if (!relevantMap.has(plan.id)) return [];
+            if (!relevantMap.has(plan.id)) {
+                console.log('Skipping plan (not in relevantMap):', plan.name, plan.id);
+                return [];
+            }
 
             const requiredPages = relevantMap.get(plan.id)!;
             const planResults: Array<{ planId: string; name: string; page: number; image: string }> = [];
@@ -155,6 +170,7 @@ const getFloorPlans = async (project: Project, snags: Snag[], onProgress?: (mess
 
     // Check for legacy single plan (either as fallback or for legacy snags)
     if (project.plan_image_url && relevantMap.has('legacy')) {
+        console.log('Processing legacy plan...');
         const requiredPages = relevantMap.get('legacy')!;
         const url = project.plan_image_url;
 
@@ -201,8 +217,11 @@ const getFloorPlans = async (project: Project, snags: Snag[], onProgress?: (mess
                 }
             }
         }
+    } else {
+        console.log('Skipping legacy plan. URL:', !!project.plan_image_url, 'Has legacy snags:', relevantMap.has('legacy'));
     }
 
+    console.log('getFloorPlans results:', results.length);
     return results;
 };
 
