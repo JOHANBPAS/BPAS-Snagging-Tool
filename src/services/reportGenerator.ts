@@ -151,53 +151,53 @@ const getFloorPlans = async (project: Project, snags: Snag[], onProgress?: (mess
         const allPlanResults = await Promise.all(planPromises);
         allPlanResults.forEach(p => results.push(...p));
 
-    } else if (project.plan_image_url) {
-        // Fallback to legacy single plan
-        if (relevantMap.has('legacy')) {
-            const requiredPages = relevantMap.get('legacy')!;
-            const url = project.plan_image_url;
+    }
 
-            if (url.toLowerCase().endsWith('.pdf')) {
-                try {
-                    const pdfJS = await import('pdfjs-dist');
+    // Check for legacy single plan (either as fallback or for legacy snags)
+    if (project.plan_image_url && relevantMap.has('legacy')) {
+        const requiredPages = relevantMap.get('legacy')!;
+        const url = project.plan_image_url;
 
-                    if (!pdfJS.GlobalWorkerOptions.workerSrc) {
-                        pdfJS.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@4.8.69/build/pdf.worker.min.mjs';
-                    }
+        if (url.toLowerCase().endsWith('.pdf')) {
+            try {
+                const pdfJS = await import('pdfjs-dist');
 
-                    onProgress?.('Loading legacy PDF plan...');
-                    const response = await fetch(url);
-                    if (response.ok) {
-                        const buffer = await response.arrayBuffer();
-                        const pdf = await pdfJS.getDocument({ data: buffer }).promise;
+                if (!pdfJS.GlobalWorkerOptions.workerSrc) {
+                    pdfJS.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@4.8.69/build/pdf.worker.min.mjs';
+                }
 
-                        for (let pageIndex = 1; pageIndex <= pdf.numPages; pageIndex++) {
-                            if (!requiredPages.has(pageIndex)) continue;
+                onProgress?.('Loading legacy PDF plan...');
+                const response = await fetch(url);
+                if (response.ok) {
+                    const buffer = await response.arrayBuffer();
+                    const pdf = await pdfJS.getDocument({ data: buffer }).promise;
 
-                            const page = await pdf.getPage(pageIndex);
-                            const viewport = page.getViewport({ scale: 1.5 });
-                            const canvas = document.createElement('canvas');
-                            const context = canvas.getContext('2d');
-                            if (context) {
-                                canvas.width = viewport.width;
-                                canvas.height = viewport.height;
-                                await page.render({ canvasContext: context, viewport }).promise;
-                                const image = canvas.toDataURL('image/jpeg', 0.85);
-                                results.push({ planId: 'legacy', name: 'Floor Plan', page: pageIndex, image });
-                            }
+                    for (let pageIndex = 1; pageIndex <= pdf.numPages; pageIndex++) {
+                        if (!requiredPages.has(pageIndex)) continue;
+
+                        const page = await pdf.getPage(pageIndex);
+                        const viewport = page.getViewport({ scale: 1.5 });
+                        const canvas = document.createElement('canvas');
+                        const context = canvas.getContext('2d');
+                        if (context) {
+                            canvas.width = viewport.width;
+                            canvas.height = viewport.height;
+                            await page.render({ canvasContext: context, viewport }).promise;
+                            const image = canvas.toDataURL('image/jpeg', 0.85);
+                            results.push({ planId: 'legacy', name: 'Floor Plan', page: pageIndex, image });
                         }
                     }
-                } catch (e) {
-                    console.error('Failed to load legacy PDF plan', e);
-                    onProgress?.('Error loading legacy plan');
                 }
-            } else {
-                if (requiredPages.has(1)) {
-                    onProgress?.('Loading legacy plan image...');
-                    const data = await toDataUrl(url);
-                    if (data) {
-                        results.push({ planId: 'legacy', name: 'Floor Plan', page: 1, image: data });
-                    }
+            } catch (e) {
+                console.error('Failed to load legacy PDF plan', e);
+                onProgress?.('Error loading legacy plan');
+            }
+        } else {
+            if (requiredPages.has(1)) {
+                onProgress?.('Loading legacy plan image...');
+                const data = await toDataUrl(url);
+                if (data) {
+                    results.push({ planId: 'legacy', name: 'Floor Plan', page: 1, image: data });
                 }
             }
         }
