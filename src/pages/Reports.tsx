@@ -40,6 +40,30 @@ const Reports: React.FC = () => {
     fetchProjects();
   }, []);
 
+  const deleteReport = async (report: ReportRow) => {
+    if (!confirm('Are you sure you want to delete this report?')) return;
+
+    try {
+      // Extract path from URL. URL format: .../project-reports/filename.pdf
+      // We assume the bucket is 'project-reports'
+      const url = new URL(report.file_url);
+      const path = url.pathname.split('/project-reports/')[1];
+
+      if (path) {
+        const { error: storageError } = await supabase.storage.from('project-reports').remove([decodeURIComponent(path)]);
+        if (storageError) console.error('Storage delete error:', storageError);
+      }
+
+      const { error: dbError } = await supabase.from('project_reports').delete().eq('id', report.id);
+      if (dbError) throw dbError;
+
+      setReports((prev) => prev.filter((r) => r.id !== report.id));
+    } catch (error) {
+      console.error('Error deleting report:', error);
+      alert('Failed to delete report');
+    }
+  };
+
   return (
     <div className="space-y-3 rounded-xl border border-bpas-grey/20 bg-white p-4 shadow-sm">
       <div>
@@ -74,6 +98,13 @@ const Reports: React.FC = () => {
                       onClick={() => navigator.clipboard.writeText(report.file_url)}
                     >
                       Copy link
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-rose-600 hover:bg-rose-100"
+                      onClick={() => deleteReport(report)}
+                    >
+                      Delete
                     </button>
                   </div>
                 </td>
