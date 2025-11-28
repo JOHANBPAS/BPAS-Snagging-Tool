@@ -13,7 +13,9 @@ export interface ReportGenerationOptions {
 
 const toDataUrl = async (path: string) => {
     try {
-        const res = await fetch(path, { mode: 'cors', credentials: 'omit', cache: 'no-store' });
+        const url = new URL(path);
+        url.searchParams.append('t', Date.now().toString());
+        const res = await fetch(url.toString(), { mode: 'cors', credentials: 'omit', cache: 'no-store' });
         if (!res.ok) return null;
         const blob = await res.blob();
         return await new Promise<string>((resolve) => {
@@ -104,7 +106,9 @@ const getFloorPlans = async (project: Project, snags: Snag[], onProgress?: (mess
                     }
 
                     onProgress?.(`Loading PDF plan: ${plan.name}...`);
-                    const response = await fetch(plan.url, { mode: 'cors', credentials: 'omit', cache: 'no-store' });
+                    const url = new URL(plan.url);
+                    url.searchParams.append('t', Date.now().toString());
+                    const response = await fetch(url.toString(), { mode: 'cors', credentials: 'omit', cache: 'no-store' });
                     if (!response.ok) {
                         console.error(`Failed to fetch PDF for plan ${plan.name}: ${response.statusText}`);
                         return [];
@@ -166,7 +170,9 @@ const getFloorPlans = async (project: Project, snags: Snag[], onProgress?: (mess
                 }
 
                 onProgress?.('Loading legacy PDF plan...');
-                const response = await fetch(url, { mode: 'cors', credentials: 'omit', cache: 'no-store' });
+                const pdfUrl = new URL(url);
+                pdfUrl.searchParams.append('t', Date.now().toString());
+                const response = await fetch(pdfUrl.toString(), { mode: 'cors', credentials: 'omit', cache: 'no-store' });
                 if (response.ok) {
                     const buffer = await response.arrayBuffer();
                     const pdf = await pdfJS.getDocument({ data: buffer }).promise;
@@ -772,7 +778,9 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
 
             if (photoRows && photoRows.length > 0) {
                 const photoPromises = photoRows.map(async (row) => {
-                    const res = await fetch(row.photo_url, { mode: 'cors', credentials: 'omit', cache: 'no-store' });
+                    const url = new URL(row.photo_url);
+                    url.searchParams.append('t', Date.now().toString());
+                    const res = await fetch(url.toString(), { mode: 'cors', credentials: 'omit', cache: 'no-store' });
                     if (res.ok) return await res.arrayBuffer();
                     return null;
                 });
@@ -790,6 +798,11 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
                 if (plan) {
                     const snippetDataUrl = await createLocationSnippet(plan.image, snag.plan_x, snag.plan_y);
                     if (snippetDataUrl) {
+                        // snippetDataUrl is a data: URL, so no need to fetch it or append params
+                        // But wait, the original code fetches it?
+                        // "const res = await fetch(snippetDataUrl);"
+                        // Fetching a data URL is valid and returns a blob/buffer.
+                        // We don't need to append params to a data URL.
                         const res = await fetch(snippetDataUrl);
                         if (res.ok) locationSnippet = await res.arrayBuffer();
                     }
