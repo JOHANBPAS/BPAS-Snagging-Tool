@@ -13,7 +13,13 @@ export interface ReportGenerationOptions {
 
 const toDataUrl = async (path: string) => {
     try {
-        const url = new URL(path);
+        let url: URL;
+        if (path.startsWith('http')) {
+            url = new URL(path);
+        } else {
+            url = new URL(path, window.location.origin);
+        }
+
         url.searchParams.append('report', 'true');
         url.searchParams.append('t', Date.now().toString());
         const res = await fetch(url.toString(), { mode: 'cors', credentials: 'omit', cache: 'no-store' });
@@ -445,7 +451,7 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
         head: [['#', 'Title', 'Location', 'Status', 'Priority', 'Due']],
         styles: { fontSize: 9, font: 'helvetica' },
         headStyles: { fillColor: [235, 160, 0], textColor: [18, 18, 18] },
-        body: sortedSnags.map((snag) => [
+        body: snags.map((snag) => [
             snagIndexMap.get(snag.id) || '-',
             snag.title,
             snag.location || '—',
@@ -747,7 +753,7 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
             ),
             tableHeader: true,
         }),
-        ...sortedSnags.map(snag =>
+        ...snags.map(snag =>
             new TableRow({
                 children: [
                     String(snagIndexMap.get(snag.id) || '-'),
