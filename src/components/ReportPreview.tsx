@@ -86,7 +86,7 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
   };
 
   return (
-    <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="space-y-2 rounded-xl border border-slate-200 bg-white px-3 py-3 sm:px-4 shadow-sm w-full max-w-full overflow-x-hidden">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs uppercase tracking-wide text-bpas-grey font-syne">Automated reporting</p>

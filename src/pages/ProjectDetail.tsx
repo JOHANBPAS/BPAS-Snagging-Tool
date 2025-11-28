@@ -125,7 +125,7 @@ export const ProjectDetail: React.FC = () => {
   if (!project) return <p className="p-4 text-slate-700">Project not found.</p>;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 w-full max-w-full overflow-x-hidden">
       <ProjectHeader
         project={project}
         snags={snags}

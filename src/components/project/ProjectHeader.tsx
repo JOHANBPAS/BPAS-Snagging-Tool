@@ -16,7 +16,7 @@ export const ProjectHeader: React.FC<Props> = ({ project, snags, action, onEdit,
     const completedPct = totalSnags === 0 ? 0 : Math.round((completedSnags / totalSnags) * 100);
 
     return (
-        <div className="mb-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="mb-6 rounded-xl border border-slate-200 bg-white px-3 py-4 sm:px-6 shadow-sm overflow-x-hidden w-full max-w-full">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div className="flex-1 min-w-0">
                     <div className="flex flex-col sm:flex-row sm:items-center gap-3">

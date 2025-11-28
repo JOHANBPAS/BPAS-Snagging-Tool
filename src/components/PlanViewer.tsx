@@ -181,7 +181,7 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
 
 
   return (
-    <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="space-y-3 rounded-xl border border-slate-200 bg-white px-3 py-4 sm:px-4 shadow-sm overflow-x-hidden">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs uppercase tracking-wide text-slate-500">Floor plan</p>

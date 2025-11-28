@@ -65,7 +65,7 @@ const Reports: React.FC = () => {
   };
 
   return (
-    <div className="space-y-3 rounded-xl border border-bpas-grey/20 bg-white p-4 shadow-sm">
+    <div className="space-y-3 rounded-xl border border-bpas-grey/20 bg-white px-3 py-4 sm:px-4 shadow-sm w-full max-w-full overflow-x-hidden">
       <div>
         <p className="text-xs uppercase tracking-wide text-bpas-grey font-syne">Reports</p>
         <h3 className="text-xl font-syne font-semibold text-bpas-black">Generated reports</h3>
