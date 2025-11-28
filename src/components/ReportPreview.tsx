@@ -92,11 +92,11 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
           <p className="text-xs uppercase tracking-wide text-bpas-grey font-syne">Automated reporting</p>
           <h3 className="text-lg font-syne font-semibold text-bpas-black">Generate Report</h3>
         </div>
-        <div className="flex gap-2">
-          <button onClick={handleExportWord} disabled={loading} className="btn-secondary disabled:opacity-60">
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+          <button onClick={handleExportWord} disabled={loading} className="btn-secondary disabled:opacity-60 w-full sm:w-auto text-center justify-center">
             Word
           </button>
-          <button onClick={handleGenerateReport} disabled={loading} className="btn-primary disabled:opacity-60">
+          <button onClick={handleGenerateReport} disabled={loading} className="btn-primary disabled:opacity-60 w-full sm:w-auto text-center justify-center">
             {loading ? (progress ? progress : 'Generating...') : 'PDF'}
           </button>
         </div>

@@ -72,36 +72,41 @@ const Reports: React.FC = () => {
         <div className="mt-2 h-1 w-10 rounded-full bg-bpas-yellow" />
       </div>
       <div className="overflow-x-auto rounded-lg border border-bpas-grey/20">
-        <table className="min-w-full text-sm font-raleway text-bpas-grey">
+        {/* Desktop Table View */}
+        <table className="hidden sm:table min-w-full table-fixed text-sm font-raleway text-bpas-grey">
           <thead className="bg-bpas-light text-bpas-black">
             <tr>
-              <th className="px-3 py-2 text-left font-syne">Report</th>
-              <th className="px-3 py-2 text-left font-syne">Project</th>
-              <th className="px-3 py-2 text-left font-syne">Generated</th>
-              <th className="px-3 py-2 text-left font-syne">Actions</th>
+              <th className="w-[40%] px-3 py-2 text-left font-syne">Report</th>
+              <th className="w-[20%] px-3 py-2 text-left font-syne">Project</th>
+              <th className="w-[20%] px-3 py-2 text-left font-syne">Generated</th>
+              <th className="w-[20%] px-3 py-2 text-right font-syne">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-bpas-light">
             {reports.map((report) => (
               <tr key={report.id} className="hover:bg-bpas-light">
-                <td className="whitespace-nowrap px-3 py-2 font-semibold text-bpas-black">{report.file_name}</td>
-                <td className="px-3 py-2">{projects[report.project_id]?.name || report.project_id}</td>
-                <td className="px-3 py-2">{report.generated_at?.slice(0, 19).replace('T', ' ') || '—'}</td>
-                <td className="px-3 py-2">
-                  <div className="flex flex-wrap gap-2">
-                    <a className="btn-primary" href={report.file_url} target="_blank" rel="noreferrer">
+                <td className="px-3 py-2 font-semibold text-bpas-black">
+                  <div className="max-w-[300px] lg:max-w-[420px] truncate" title={report.file_name}>
+                    {report.file_name}
+                  </div>
+                </td>
+                <td className="px-3 py-2 truncate">{projects[report.project_id]?.name || report.project_id}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{report.generated_at?.slice(0, 16).replace('T', ' ') || '—'}</td>
+                <td className="px-3 py-2 text-right">
+                  <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+                    <a className="btn-primary px-3 py-1 text-xs" href={report.file_url} target="_blank" rel="noreferrer">
                       Download
                     </a>
                     <button
                       type="button"
-                      className="btn-secondary px-3 py-2"
+                      className="btn-secondary px-3 py-1 text-xs"
                       onClick={() => navigator.clipboard.writeText(report.file_url)}
                     >
-                      Copy link
+                      Copy
                     </button>
                     <button
                       type="button"
-                      className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-rose-600 hover:bg-rose-100"
+                      className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1 text-xs text-rose-600 hover:bg-rose-100"
                       onClick={() => deleteReport(report)}
                     >
                       Delete
@@ -119,6 +124,48 @@ const Reports: React.FC = () => {
             )}
           </tbody>
         </table>
+
+        {/* Mobile Card View */}
+        <div className="block sm:hidden divide-y divide-bpas-light">
+          {reports.map((report) => (
+            <div key={report.id} className="p-4 space-y-3">
+              <div className="flex justify-between items-start gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-bpas-black text-sm truncate">{report.file_name}</p>
+                  <p className="text-xs text-bpas-grey mt-1">{projects[report.project_id]?.name || report.project_id}</p>
+                </div>
+                <span className="text-xs text-bpas-grey whitespace-nowrap">
+                  {report.generated_at?.slice(0, 10) || '—'}
+                </span>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <a className="flex-1 btn-primary text-center py-2 text-xs" href={report.file_url} target="_blank" rel="noreferrer">
+                  Download
+                </a>
+                <button
+                  type="button"
+                  className="flex-1 btn-secondary py-2 text-xs"
+                  onClick={() => navigator.clipboard.writeText(report.file_url)}
+                >
+                  Copy Link
+                </button>
+                <button
+                  type="button"
+                  className="flex-1 rounded-lg border border-rose-200 bg-rose-50 py-2 text-xs text-rose-600 hover:bg-rose-100"
+                  onClick={() => deleteReport(report)}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          ))}
+          {reports.length === 0 && (
+            <div className="p-4 text-center text-bpas-grey text-sm">
+              No reports yet.
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
