@@ -30,6 +30,13 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         runtimeCaching: [
           {
+            urlPattern: ({ url }) => url.searchParams.has('report'),
+            handler: 'NetworkOnly',
+            options: {
+              cacheName: 'report-bypass',
+            },
+          },
+          {
             urlPattern: /^https:\/\/.*\.supabase\.co\/storage\/v1\/object\/public\/plans\/.*/i,
             handler: 'CacheFirst',
             options: {

@@ -14,6 +14,7 @@ export interface ReportGenerationOptions {
 const toDataUrl = async (path: string) => {
     try {
         const url = new URL(path);
+        url.searchParams.append('report', 'true');
         url.searchParams.append('t', Date.now().toString());
         const res = await fetch(url.toString(), { mode: 'cors', credentials: 'omit', cache: 'no-store' });
         if (!res.ok) return null;
@@ -107,6 +108,7 @@ const getFloorPlans = async (project: Project, snags: Snag[], onProgress?: (mess
 
                     onProgress?.(`Loading PDF plan: ${plan.name}...`);
                     const url = new URL(plan.url);
+                    url.searchParams.append('report', 'true');
                     url.searchParams.append('t', Date.now().toString());
                     const response = await fetch(url.toString(), { mode: 'cors', credentials: 'omit', cache: 'no-store' });
                     if (!response.ok) {
@@ -171,6 +173,7 @@ const getFloorPlans = async (project: Project, snags: Snag[], onProgress?: (mess
 
                 onProgress?.('Loading legacy PDF plan...');
                 const pdfUrl = new URL(url);
+                pdfUrl.searchParams.append('report', 'true');
                 pdfUrl.searchParams.append('t', Date.now().toString());
                 const response = await fetch(pdfUrl.toString(), { mode: 'cors', credentials: 'omit', cache: 'no-store' });
                 if (response.ok) {
@@ -779,6 +782,7 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
             if (photoRows && photoRows.length > 0) {
                 const photoPromises = photoRows.map(async (row) => {
                     const url = new URL(row.photo_url);
+                    url.searchParams.append('report', 'true');
                     url.searchParams.append('t', Date.now().toString());
                     const res = await fetch(url.toString(), { mode: 'cors', credentials: 'omit', cache: 'no-store' });
                     if (res.ok) return await res.arrayBuffer();
