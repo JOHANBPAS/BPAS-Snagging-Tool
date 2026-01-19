@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 
 export interface PlanPin {
   id: string;
@@ -108,14 +109,98 @@ export const PlanCanvasSkia: React.FC<PlanCanvasSkiaProps> = ({
   );
 
   return (
-    <div ref={containerRef} style={{ width: "100%", height: "100%" }}>
-      <canvas
-        ref={canvasRef}
-        width={size.width}
-        height={size.height}
-        style={canvasStyle}
-        onClick={handleClick}
-      />
-    </div>
+    <TransformWrapper
+      initialScale={1}
+      minScale={0.5}
+      maxScale={5}
+      centerOnInit
+      wheel={{ step: 0.15 }}
+      doubleClick={{ disabled: false, step: 0.7 }}
+      panning={{ velocityDisabled: true, disabled: false }}
+      limitToBounds={true}
+      minPositionX={-100}
+      minPositionY={-100}
+      maxPositionX={100}
+      maxPositionY={100}
+    >
+      {({ zoomIn, zoomOut, resetTransform, state }) => (
+        <div ref={containerRef} style={{ width: "100%", height: "100%", position: "relative" }}>
+          <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }}>
+            <canvas
+              ref={canvasRef}
+              width={size.width}
+              height={size.height}
+              style={canvasStyle}
+              onClick={handleClick}
+            />
+          </TransformComponent>
+          <div style={{
+            position: "absolute",
+            bottom: 16,
+            left: 16,
+            display: "flex",
+            gap: 8,
+            alignItems: "center",
+            backgroundColor: "rgba(0, 0, 0, 0.6)",
+            borderRadius: 8,
+            padding: "8px 12px",
+            zIndex: 10,
+          }}>
+            <button
+              onClick={() => zoomOut(0.3)}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 4,
+                backgroundColor: "#FFFFFF",
+                border: "none",
+                fontSize: 18,
+                fontWeight: "bold",
+                cursor: "pointer",
+                color: "#000000",
+              }}
+            >
+              −
+            </button>
+            <span style={{ color: "#FFFFFF", fontSize: 12, fontWeight: 700, minWidth: 40, textAlign: "center" }}>
+              {Math.round(state.scale * 100)}%
+            </span>
+            <button
+              onClick={() => zoomIn(0.3)}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 4,
+                backgroundColor: "#FFFFFF",
+                border: "none",
+                fontSize: 18,
+                fontWeight: "bold",
+                cursor: "pointer",
+                color: "#000000",
+              }}
+            >
+              +
+            </button>
+            <button
+              onClick={() => resetTransform()}
+              style={{
+                height: 32,
+                paddingLeft: 12,
+                paddingRight: 12,
+                borderRadius: 4,
+                backgroundColor: "#FFFFFF",
+                border: "none",
+                fontSize: 11,
+                fontWeight: 700,
+                cursor: "pointer",
+                color: "#000000",
+              }}
+            >
+              Reset
+            </button>
+          </div>
+        </div>
+      )}
+    </TransformWrapper>
   );
 };
