@@ -48,6 +48,9 @@ const SiteMode: React.FC = () => {
   const workerRef = React.useRef<ReturnType<typeof createSyncWorker> | null>(null);
   const [bulkMode, setBulkMode] = React.useState(false);
   const [selectedSnags, setSelectedSnags] = React.useState<Set<string>>(new Set());
+  const [editingSnagId, setEditingSnagId] = React.useState<string | null>(null);
+  const [editingSnagPhotos, setEditingSnagPhotos] = React.useState<File[]>([]);
+  const [editingSnagPhotoPreviews, setEditingSnagPhotoPreviews] = React.useState<string[]>([]);
 
   const repos = React.useMemo(() => createSiteModeRepositories(), []);
 
@@ -186,6 +189,10 @@ const SiteMode: React.FC = () => {
   };
 
   const handleSave = async (draft: { title?: string; description?: string; priority?: "low" | "med" | "high" | "critical"; assigneeId?: string }) => {
+    if (editingSnagId) {
+      await handleSaveEdit(draft);
+      return;
+    }
     if (!projectId) return;
     const now = Date.now();
     const snagId = generateId();
@@ -257,6 +264,74 @@ const SiteMode: React.FC = () => {
       recognition.onerror = () => resolve(null);
       recognition.start();
     });
+  };
+
+  const handleEditSnag = (snag: SnagRecord) => {
+    setEditingSnagId(snag.id);
+    setEditingSnagPhotos([]);
+    setEditingSnagPhotoPreviews([]);
+    setIsSheetOpen(true);
+  };
+
+  const handleSaveEdit = async (draft: { title?: string; description?: string; priority?: "low" | "med" | "high" | "critical"; assigneeId?: string }) => {
+    if (!editingSnagId) return;
+    const snag = snags.find((s) => s.id === editingSnagId);
+    if (!snag) return;
+
+    const updated: SnagRecord = {
+      ...snag,
+      title: draft.title?.trim() || snag.title,
+      description: draft.description?.trim(),
+      assigneeId: draft.assigneeId,
+      updatedAt: Date.now(),
+      metadataJson: JSON.stringify({ priority: toPriority(draft.priority) }),
+    };
+
+    const payload = {
+      title: updated.title,
+      description: updated.description ?? null,
+      assigned_to: updated.assigneeId ?? null,
+      priority: toPriority(draft.priority),
+    };
+
+    await repos.snags.upsert(updated);
+    await enqueueSnagUpdate(snag, payload);
+    for (const photo of editingSnagPhotos) {
+      await queuePhoto(editingSnagId, photo, photo.name);
+    }
+    await refreshSnags();
+    setEditingSnagId(null);
+    setEditingSnagPhotos([]);
+    setEditingSnagPhotoPreviews([]);
+    setIsSheetOpen(false);
+    setToast("Updated • queued");
+  };
+
+  const handleDeleteSnag = async (snag: SnagRecord) => {
+    if (!confirm("Delete this snag? This cannot be undone.")) return;
+
+    const updated: SnagRecord = {
+      ...snag,
+      localStatus: "queued",
+      updatedAt: Date.now(),
+    };
+
+    const queueItem: SyncQueueItem = {
+      id: generateId(),
+      entity: "snag",
+      entityId: snag.id,
+      action: "delete",
+      payloadJson: JSON.stringify({ id: snag.id }),
+      status: "queued",
+      createdAt: Date.now(),
+    };
+
+    await repos.snags.upsert(updated);
+    await repos.queue.enqueue(queueItem);
+    await refreshSnags();
+    await refreshCounts();
+    await refreshQueueItems();
+    setToast("Deleted • queued");
   };
 
   const pins = snags
@@ -535,6 +610,18 @@ const SiteMode: React.FC = () => {
                         Reopen
                       </button>
                     )}
+                    <button
+                      className="h-11 rounded-lg bg-blue-600 px-3 text-xs font-bold text-white hover:bg-blue-700"
+                      onClick={() => handleEditSnag(snag)}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      className="h-11 rounded-lg bg-red-600 px-3 text-xs font-bold text-white hover:bg-red-700"
+                      onClick={() => handleDeleteSnag(snag)}
+                    >
+                      Delete
+                    </button>
                   </div>
                 )}
               </div>
@@ -584,13 +671,30 @@ const SiteMode: React.FC = () => {
 
       <QuickCaptureSheet
         isOpen={isSheetOpen}
-        onClose={() => setIsSheetOpen(false)}
+        onClose={() => {
+          setIsSheetOpen(false);
+          setEditingSnagId(null);
+          setEditingSnagPhotos([]);
+          setEditingSnagPhotoPreviews([]);
+        }}
         onSave={handleSave}
         onVoiceToText={handleVoice}
         onPhotoCapture={openPhotoPicker}
-        photoCount={pendingPhotos.length}
-        photoPreviews={pendingPhotoPreviews}
-        onRemovePhoto={handleRemovePhoto}
+        photoCount={editingSnagId ? editingSnagPhotos.length : pendingPhotos.length}
+        photoPreviews={editingSnagId ? editingSnagPhotoPreviews : pendingPhotoPreviews}
+        onRemovePhoto={(index) => {
+          if (editingSnagId) {
+            setEditingSnagPhotos((prev) => prev.filter((_, i) => i !== index));
+            setEditingSnagPhotoPreviews((prev) => {
+              const next = prev.filter((_, i) => i !== index);
+              const removed = prev[index];
+              if (removed) URL.revokeObjectURL(removed);
+              return next;
+            });
+          } else {
+            handleRemovePhoto(index);
+          }
+        }}
       />
 
       <input

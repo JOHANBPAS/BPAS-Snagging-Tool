@@ -14,6 +14,7 @@ interface Props {
     editingSnag: Snag | null;
     onProjectUpdate: (project: Project) => void;
     onSelectLocation: (coords: { x: number; y: number; page: number; planId: string }) => void;
+    readOnly?: boolean;
 }
 
 export const PlanManager: React.FC<Props> = ({
@@ -22,6 +23,7 @@ export const PlanManager: React.FC<Props> = ({
     editingSnag,
     onProjectUpdate,
     onSelectLocation,
+    readOnly = false,
 }) => {
     const { user } = useAuth();
     const [plans, setPlans] = useState<ProjectPlan[]>([]);
@@ -232,7 +234,7 @@ export const PlanManager: React.FC<Props> = ({
                     <PlanViewer
                         planUrl={displayUrl}
                         snags={snags.filter(s => s.plan_id === activePlanId || (!s.plan_id && !activePlanId))} // Filter snags by plan
-                        onSelectLocation={(coords) => onSelectLocation({ ...coords, planId: activePlanId || '' })}
+                        onSelectLocation={readOnly ? undefined : (coords) => onSelectLocation({ ...coords, planId: activePlanId || '' })}
                     />
                 </div>
             ) : (

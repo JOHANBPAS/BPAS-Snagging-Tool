@@ -167,6 +167,7 @@ export const ProjectDetail: React.FC = () => {
             setCreateCoords({ x, y, page, planId });
           }
         }}
+        readOnly={true}
       />
 
       <SnagManager
