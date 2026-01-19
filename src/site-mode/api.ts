@@ -1,11 +1,12 @@
 import { supabase } from "../lib/supabaseClient";
 import type { SyncApi } from "./types";
+import type { Database } from "../types/supabase";
 
 export const siteModeApi: SyncApi = {
   async createSnag(payload: unknown) {
     const { data, error } = await supabase
       .from("snags")
-      .insert(payload as Record<string, unknown>)
+      .insert(payload as Database["public"]["Tables"]["snags"]["Insert"])
       .select("id, created_at")
       .single();
     if (error) throw error;
@@ -14,7 +15,7 @@ export const siteModeApi: SyncApi = {
   async updateSnag(id: string, payload: unknown) {
     const { data, error } = await supabase
       .from("snags")
-      .update(payload as Record<string, unknown>)
+      .update(payload as Database["public"]["Tables"]["snags"]["Update"])
       .eq("id", id)
       .select("created_at")
       .single();
