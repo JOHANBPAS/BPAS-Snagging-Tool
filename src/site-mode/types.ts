@@ -8,6 +8,7 @@ export interface SnagRecord {
   description?: string;
   assigneeId?: string;
   status?: SnagStatus;
+  planId?: string | null;
   coordinates?: {
     x: number; // 0..1
     y: number; // 0..1

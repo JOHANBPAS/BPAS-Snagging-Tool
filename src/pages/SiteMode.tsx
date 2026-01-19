@@ -1,7 +1,7 @@
 import React from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
-import type { Project } from "../types";
+import type { Project, ProjectPlan } from "../types";
 import { PlanCanvasSkia } from "../site-mode/components/PlanCanvasSkia";
 import { QuickCaptureSheet } from "../site-mode/components/QuickCaptureSheet";
 import { SyncDrawer } from "../site-mode/components/SyncDrawer";
@@ -29,11 +29,15 @@ const SiteMode: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const [project, setProject] = React.useState<Project | null>(null);
+  const [planId, setPlanId] = React.useState<string | null>(null);
+  const [planUrl, setPlanUrl] = React.useState<string | null>(null);
+  const [plans, setPlans] = React.useState<ProjectPlan[]>([]);
   const [snags, setSnags] = React.useState<SnagRecord[]>([]);
   const [pendingCount, setPendingCount] = React.useState({ queued: 0, syncing: 0, failed: 0 });
   const [isSheetOpen, setIsSheetOpen] = React.useState(false);
   const [placePinMode, setPlacePinMode] = React.useState(false);
   const [pendingCoord, setPendingCoord] = React.useState<{ x: number; y: number } | null>(null);
+  const [pinTargetSnagId, setPinTargetSnagId] = React.useState<string | null>(null);
   const [toast, setToast] = React.useState<string | null>(null);
   const [online, setOnline] = React.useState(navigator.onLine);
   const [drawerOpen, setDrawerOpen] = React.useState(false);
@@ -69,7 +73,21 @@ const SiteMode: React.FC = () => {
       const { data } = await supabase.from("projects").select("*").eq("id", projectId).single();
       setProject((data as Project) || null);
     };
+    const fetchPlans = async () => {
+      const { data } = await supabase
+        .from("project_plans")
+        .select("*")
+        .eq("project_id", projectId)
+        .order("order", { ascending: true });
+      const planList = (data as ProjectPlan[]) || [];
+      setPlans(planList);
+      if (planList.length > 0) {
+        setPlanId(planList[0].id);
+        setPlanUrl(planList[0].url);
+      }
+    };
     fetchProject();
+    fetchPlans();
     refreshSnags();
     refreshCounts();
     refreshQueueItems();
@@ -118,7 +136,31 @@ const SiteMode: React.FC = () => {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
-  const handlePinPlaced = (coord: { x: number; y: number }) => {
+  const handlePinPlaced = async (coord: { x: number; y: number }) => {
+    if (pinTargetSnagId) {
+      const target = snags.find((snag) => snag.id === pinTargetSnagId);
+      if (!target) return;
+      const updated: SnagRecord = {
+        ...target,
+        coordinates: coord,
+        planId,
+        localStatus: "queued",
+        updatedAt: Date.now(),
+      };
+      await repos.snags.upsert(updated);
+      await enqueueSnagUpdate(target, {
+        plan_x: coord.x,
+        plan_y: coord.y,
+        plan_page: 1,
+        plan_id: planId,
+      });
+      await refreshSnags();
+      setPinTargetSnagId(null);
+      setPlacePinMode(false);
+      setToast("Pin saved");
+      return;
+    }
+
     setPendingCoord(coord);
     setIsSheetOpen(true);
     setPlacePinMode(false);
@@ -135,6 +177,7 @@ const SiteMode: React.FC = () => {
       description: draft.description?.trim(),
       assigneeId: draft.assigneeId,
       status: "open",
+      planId,
       coordinates: pendingCoord || undefined,
       localStatus: "queued",
       createdAt: now,
@@ -152,6 +195,7 @@ const SiteMode: React.FC = () => {
       plan_x: record.coordinates?.x ?? null,
       plan_y: record.coordinates?.y ?? null,
       plan_page: 1,
+      plan_id: planId,
     };
 
     const payload = { ...basePayload, id: snagId };
@@ -197,7 +241,11 @@ const SiteMode: React.FC = () => {
   };
 
   const pins = snags
-    .filter((snag) => snag.coordinates)
+    .filter((snag) => {
+      if (!snag.coordinates) return false;
+      if (!planId) return true;
+      return !snag.planId || snag.planId === planId;
+    })
     .map((snag) => ({ id: snag.id, x: snag.coordinates!.x, y: snag.coordinates!.y }));
 
   const enqueueSnagUpdate = async (snag: SnagRecord, payload: Record<string, unknown>) => {
@@ -310,8 +358,27 @@ const SiteMode: React.FC = () => {
 
       <div className="grid gap-4 p-4 lg:grid-cols-[2fr_1fr]">
         <div className="relative h-[60vh] rounded-2xl border border-slate-800 bg-slate-900">
+          {plans.length > 1 && (
+            <div className="absolute left-4 top-4 z-10 flex gap-2 overflow-x-auto rounded-full bg-black/40 p-2">
+              {plans.map((plan) => (
+                <button
+                  key={plan.id}
+                  onClick={() => {
+                    setPlanId(plan.id);
+                    setPlanUrl(plan.url);
+                  }}
+                  className={`whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold ${plan.id === planId
+                    ? "bg-yellow-400 text-slate-900"
+                    : "border border-slate-500 text-slate-200"
+                    }`}
+                >
+                  {plan.name || "Plan"}
+                </button>
+              ))}
+            </div>
+          )}
           <PlanCanvasSkia
-            imageUri={project?.plan_image_url || "/brand/logo-light.png"}
+            imageUri={planUrl || project?.plan_image_url || "/brand/logo-light.png"}
             pins={pins}
             isPlacePinMode={placePinMode}
             onPinPlaced={handlePinPlaced}
@@ -326,6 +393,7 @@ const SiteMode: React.FC = () => {
               onClick={() => {
                 setPlacePinMode(true);
                 setIsSheetOpen(false);
+                setPinTargetSnagId(null);
               }}
               className="h-14 w-14 rounded-full bg-yellow-400 text-2xl font-bold text-slate-900 shadow-lg"
             >
@@ -403,6 +471,7 @@ const SiteMode: React.FC = () => {
                       onClick={() => {
                         setPlacePinMode(true);
                         setPendingCoord(null);
+                        setPinTargetSnagId(snag.id);
                       }}
                     >
                       Place on plan
