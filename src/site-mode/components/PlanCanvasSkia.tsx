@@ -24,7 +24,9 @@ export const PlanCanvasSkia: React.FC<PlanCanvasSkiaProps> = ({
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const transformRef = useRef<{ scale: number }>({ scale: 1 });
   const [size, setSize] = useState({ width: 1, height: 1 });
+  const [zoomLevel, setZoomLevel] = useState(100);
 
   const draw = useCallback(
     (ctx: CanvasRenderingContext2D, img: HTMLImageElement | null) => {
@@ -122,6 +124,10 @@ export const PlanCanvasSkia: React.FC<PlanCanvasSkiaProps> = ({
       minPositionY={-100}
       maxPositionX={100}
       maxPositionY={100}
+      onZoom={(e) => {
+        transformRef.current.scale = e.state.scale;
+        setZoomLevel(Math.round(e.state.scale * 100));
+      }}
     >
       {({ zoomIn, zoomOut, resetTransform }) => (
         <div ref={containerRef} style={{ width: "100%", height: "100%", position: "relative" }}>
@@ -163,7 +169,7 @@ export const PlanCanvasSkia: React.FC<PlanCanvasSkiaProps> = ({
               −
             </button>
             <span style={{ color: "#FFFFFF", fontSize: 12, fontWeight: 700, minWidth: 40, textAlign: "center" }}>
-              {Math.round(state.scale * 100)}%
+              {zoomLevel}%
             </span>
             <button
               onClick={() => zoomIn(0.3)}
