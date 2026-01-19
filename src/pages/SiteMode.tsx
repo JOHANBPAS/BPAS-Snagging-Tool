@@ -317,7 +317,7 @@ const SiteMode: React.FC = () => {
             onPinPlaced={handlePinPlaced}
           />
           {placePinMode && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-lg font-semibold">
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/40 text-lg font-semibold">
               Tap to place a pin
             </div>
           )}
