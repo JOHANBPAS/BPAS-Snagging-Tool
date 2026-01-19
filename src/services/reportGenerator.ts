@@ -231,6 +231,7 @@ const createLocationSnippet = async (
     planImage: string,
     x: number,
     y: number,
+    snagNumber?: number,
     snippetSize = 200,
 ): Promise<string | null> => {
     return new Promise((resolve) => {
@@ -250,14 +251,30 @@ const createLocationSnippet = async (
             // Draw the cropped area
             ctx.drawImage(img, cropX, cropY, snippetSize, snippetSize, 0, 0, snippetSize, snippetSize);
 
-            // Draw a marker in the center
+            // Draw a numbered marker in the center (matching PlanViewer style)
+            const centerX = snippetSize / 2;
+            const centerY = snippetSize / 2;
+            const radius = 12;
+
+            // Draw the red circle
             ctx.beginPath();
-            ctx.arc(snippetSize / 2, snippetSize / 2, 10, 0, 2 * Math.PI);
-            ctx.fillStyle = 'rgba(235, 64, 52, 0.8)';
+            ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+            ctx.fillStyle = '#f43f5e'; // rose-500
             ctx.fill();
+
+            // Draw white border
             ctx.strokeStyle = 'white';
             ctx.lineWidth = 2;
             ctx.stroke();
+
+            // Draw the number if provided
+            if (snagNumber !== undefined) {
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 14px Arial, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(String(snagNumber), centerX, centerY);
+            }
 
             resolve(canvas.toDataURL('image/jpeg', 0.8));
         };
@@ -524,7 +541,8 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                     });
 
                     if (plan) {
-                        locationSnippet = await createLocationSnippet(plan.image, snag.plan_x, snag.plan_y);
+                        const globalIndex = snagIndexMap.get(snag.id) || 0;
+                        locationSnippet = await createLocationSnippet(plan.image, snag.plan_x, snag.plan_y, globalIndex);
                     }
                 }
 
@@ -625,44 +643,92 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
 
     const children: any[] = [];
 
+    // Title and header information with better styling
     children.push(
         new Paragraph({
             text: "BPAS Snagging Report",
             heading: "Title",
             alignment: AlignmentType.CENTER,
-            spacing: { after: 400 },
-        }),
-        new Paragraph({
-            text: `Project: ${project.name}`,
-            heading: "Heading2",
             spacing: { after: 200 },
         }),
         new Paragraph({
-            text: `Client: ${project.client_name || 'N/A'}`,
+            children: [
+                new TextRun({
+                    text: "Project: ",
+                    bold: true,
+                }),
+                new TextRun(project.name),
+            ],
+            spacing: { after: 100 },
+        }),
+        new Paragraph({
+            children: [
+                new TextRun({
+                    text: "Client: ",
+                    bold: true,
+                }),
+                new TextRun(project.client_name || 'N/A'),
+            ],
             spacing: { after: 100 },
         }),
         ...(project.project_number ? [new Paragraph({
-            text: `Project Number: ${project.project_number}`,
+            children: [
+                new TextRun({
+                    text: "Project Number: ",
+                    bold: true,
+                }),
+                new TextRun(project.project_number),
+            ],
             spacing: { after: 100 },
         })] : []),
         ...(project.inspection_type ? [new Paragraph({
-            text: `Inspection Type: ${project.inspection_type}`,
+            children: [
+                new TextRun({
+                    text: "Inspection Type: ",
+                    bold: true,
+                }),
+                new TextRun(project.inspection_type),
+            ],
             spacing: { after: 100 },
         })] : []),
         ...(project.inspection_scope ? [new Paragraph({
-            text: `Scope: ${project.inspection_scope}`,
+            children: [
+                new TextRun({
+                    text: "Scope: ",
+                    bold: true,
+                }),
+                new TextRun(project.inspection_scope),
+            ],
             spacing: { after: 100 },
         })] : []),
         ...(project.inspection_description ? [new Paragraph({
-            text: `Description: ${project.inspection_description}`,
-            spacing: { after: 200 },
+            children: [
+                new TextRun({
+                    text: "Description: ",
+                    bold: true,
+                }),
+                new TextRun(project.inspection_description),
+            ],
+            spacing: { after: 100 },
         })] : []),
         new Paragraph({
-            text: `Generated: ${new Date().toLocaleString()}`,
+            children: [
+                new TextRun({
+                    text: "Generated: ",
+                    bold: true,
+                }),
+                new TextRun(new Date().toLocaleString()),
+            ],
             spacing: { after: 100 },
         }),
         new Paragraph({
-            text: `Date of Inspection: ${new Date().toLocaleDateString()}`,
+            children: [
+                new TextRun({
+                    text: "Date of Inspection: ",
+                    bold: true,
+                }),
+                new TextRun(new Date().toLocaleDateString()),
+            ],
             spacing: { after: 400 },
         })
     );
@@ -806,7 +872,8 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
                 });
 
                 if (plan) {
-                    const snippetDataUrl = await createLocationSnippet(plan.image, snag.plan_x, snag.plan_y);
+                    const globalIndex = snagIndexMap.get(snag.id) || 0;
+                    const snippetDataUrl = await createLocationSnippet(plan.image, snag.plan_x, snag.plan_y, globalIndex);
                     if (snippetDataUrl) {
                         // snippetDataUrl is a data: URL, so no need to fetch it or append params
                         // But wait, the original code fetches it?
@@ -832,10 +899,48 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
                     spacing: { before: 400, after: 100 },
                 }),
                 new Paragraph({
-                    text: `Location: ${snag.location || '—'} | Status: ${snag.status} | Priority: ${snag.priority}`,
+                    children: [
+                        new TextRun({
+                            text: "Location: ",
+                            bold: true,
+                        }),
+                        new TextRun(snag.location || '—'),
+                        new TextRun({
+                            text: " | Status: ",
+                            bold: true,
+                        }),
+                        new TextRun(snag.status),
+                        new TextRun({
+                            text: " | Priority: ",
+                            bold: true,
+                        }),
+                        new TextRun(snag.priority),
+                        ...(snag.due_date ? [
+                            new TextRun({
+                                text: " | Due: ",
+                                bold: true,
+                            }),
+                            new TextRun(snag.due_date)
+                        ] : []),
+                    ],
                     spacing: { after: 200 },
                 })
             );
+
+            if (snag.description) {
+                children.push(
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Description: ",
+                                bold: true,
+                            }),
+                            new TextRun(snag.description),
+                        ],
+                        spacing: { after: 200 },
+                    })
+                );
+            }
 
             const images: any[] = [];
             if (locationSnippet) {
