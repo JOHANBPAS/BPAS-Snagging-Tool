@@ -290,6 +290,7 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
     await yieldToMain();
 
     const doc = new jsPDF('p', 'pt', 'a4');
+    doc.setFont('helvetica', 'normal');
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     const margin = 40;
@@ -303,9 +304,24 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
         }
     };
 
+    const drawFooter = () => {
+        const totalPages = doc.getNumberOfPages();
+        for (let i = 1; i <= totalPages; i++) {
+            doc.setPage(i);
+            const size = doc.internal.pageSize;
+            const w = size.getWidth();
+            const h = size.getHeight();
+            const footerY = h - 28;
+            doc.setFontSize(8);
+            doc.setTextColor(110, 110, 110);
+            doc.text('BPAS Architects • www.bpas.co.za', margin, footerY);
+            doc.text(`Page ${i} of ${totalPages}`, w - margin, footerY, { align: 'right' });
+        }
+    };
+
     drawLetterhead(doc);
 
-    const contentStartY = 180;
+    const contentStartY = 150;
     doc.setFontSize(18);
     doc.setTextColor(brandColors.black);
     doc.text('BPAS Snagging Report', margin, contentStartY);
@@ -391,9 +407,9 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
             const xOffset = (landscapeWidth - finalW) / 2;
             const yOffset = margin + 30;
 
-            doc.setFontSize(14);
+            doc.setFontSize(12);
             doc.setTextColor(brandColors.black);
-            doc.text(`${plan.name} - Page ${plan.page}`, margin, margin + 15);
+            doc.text(`${plan.name} • Page ${plan.page} • ${project.name}`, margin, margin + 12);
 
             doc.addImage(scaledPlan, 'JPEG', xOffset, yOffset, finalW, finalH);
 
@@ -408,16 +424,19 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                     const x = xOffset + finalW * snag.plan_x;
                     const y = yOffset + finalH * snag.plan_y;
 
-                    // Draw marker
+                    // Draw marker with white outline for contrast
                     doc.setFillColor(235, 64, 52);
-                    doc.circle(x, y, 6, 'F'); // Slightly larger for visibility
+                    doc.circle(x, y, 7, 'F');
+                    doc.setDrawColor(255, 255, 255);
+                    doc.setLineWidth(1.2);
+                    doc.circle(x, y, 7, 'D');
 
                     // Draw number
                     const globalIndex = snagIndexMap.get(snag.id) || 0;
                     if (globalIndex) {
                         doc.setTextColor(255, 255, 255);
-                        doc.setFontSize(7);
-                        doc.text(String(globalIndex), x, y, { align: 'center', baseline: 'middle' });
+                        doc.setFontSize(8);
+                        doc.text(String(globalIndex), x, y + 1, { align: 'center', baseline: 'middle' });
                     }
                 }
             });
@@ -461,8 +480,14 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
     autoTable(doc, {
         startY: listStartY,
         head: [['#', 'Title', 'Location', 'Status', 'Priority', 'Due']],
-        styles: { fontSize: 9, font: 'helvetica' },
-        headStyles: { fillColor: [235, 160, 0], textColor: [18, 18, 18] },
+        styles: { fontSize: 9, font: 'helvetica', textColor: [45, 55, 72] },
+        headStyles: { fillColor: [235, 160, 0], textColor: [255, 255, 255], halign: 'left', valign: 'middle' },
+        bodyStyles: { valign: 'middle' },
+        alternateRowStyles: { fillColor: [248, 248, 252] },
+        columnStyles: {
+            0: { cellWidth: 18, halign: 'left' },
+            5: { halign: 'right' },
+        },
         body: snags.map((snag) => [
             snagIndexMap.get(snag.id) || '-',
             snag.title,
@@ -480,7 +505,7 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                 }
             }
         },
-        margin: { top: 100, bottom: 80, left: margin, right: margin },
+        margin: { top: 90, bottom: 80, left: margin, right: margin },
         didDrawPage: () => {
             drawLetterhead(doc);
         },
@@ -555,13 +580,24 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
 
                 const totalImages = (hasSnippet ? 1 : 0) + photos.length;
                 const rows = Math.ceil(totalImages / 2);
-                const imagesHeight = rows * (imgHeight + 20);
 
-                ensureSpace(60 + (totalImages > 0 ? imagesHeight : 20));
+                const hasDescription = Boolean(snag.description);
+                const imagesHeight = rows * (imgHeight + 26);
+                const blockHeight = 28 + 16 + (hasDescription ? 16 : 0) + (totalImages > 0 ? imagesHeight : 18) + 12;
+
+                ensureSpace(blockHeight + 12);
+
+                // Card background
+                const cardY = y - 12;
+                const cardH = blockHeight + 12;
+                doc.setFillColor(249, 250, 252);
+                doc.roundedRect(margin - 8, cardY, pageWidth - margin * 2 + 16, cardH, 6, 6, 'F');
+                doc.setDrawColor(236, 239, 241);
+                doc.roundedRect(margin - 8, cardY, pageWidth - margin * 2 + 16, cardH, 6, 6, 'S');
 
                 doc.setFontSize(12);
                 doc.setTextColor(brandColors.black);
-                doc.text(`${globalIndex}. ${snag.title} (${snag.id.slice(0, 6)})`, margin, y);
+                doc.text(`${globalIndex}. ${snag.title}`, margin, y);
                 y += 14;
                 doc.setFontSize(10);
                 doc.setTextColor(brandColors.grey);
@@ -575,36 +611,43 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                     margin,
                     y,
                 );
-                y += 48;
+                y += 18;
+
+                if (hasDescription) {
+                    doc.setFontSize(9);
+                    doc.setTextColor(brandColors.black);
+                    const descriptionText = doc.splitTextToSize(`Description: ${snag.description}`, pageWidth - margin * 2 - 10);
+                    doc.text(descriptionText, margin, y + 10);
+                    y += descriptionText.length * 10 + 4;
+                }
+
                 doc.setTextColor(brandColors.black);
 
                 if (totalImages > 0) {
-                    let currentImageIdx = 0;
+                    const imageItems: Array<{ src: string; label: string }> = [];
+                    if (locationSnippet) imageItems.push({ src: locationSnippet, label: 'Location on plan' });
+                    photos.forEach((photo, idx) => imageItems.push({ src: photo, label: `Photo ${idx + 1}` }));
 
-                    if (locationSnippet) {
-                        doc.addImage(locationSnippet, 'JPEG', margin, y, imgWidth, imgHeight);
+                    imageItems.forEach((img, idx) => {
+                        const col = idx % 2;
+                        const row = Math.floor(idx / 2);
+                        const x = margin + col * (imgWidth + 16);
+                        const yPos = y + 16 + row * (imgHeight + 26);
                         doc.setFontSize(8);
                         doc.setTextColor(brandColors.grey);
-                        doc.text('Location on plan', margin + 5, y + imgHeight - 5);
-                        currentImageIdx++;
-                    }
-
-                    photos.forEach((photo) => {
-                        const col = currentImageIdx % 2;
-                        const row = Math.floor(currentImageIdx / 2);
-                        const x = margin + col * (imgWidth + 16);
-                        const rowY = y + row * (imgHeight + 16);
-
-                        doc.addImage(photo, 'JPEG', x, rowY, imgWidth, imgHeight);
-                        currentImageIdx++;
+                        doc.text(img.label, x, yPos - 6);
+                        doc.addImage(img.src, 'JPEG', x, yPos, imgWidth, imgHeight);
                     });
 
-                    y += rows * (imgHeight + 16);
+                    y += 16 + rows * (imgHeight + 26);
                 } else {
-                    doc.text('No photos attached.', margin, y);
-                    y += 20;
+                    doc.setFontSize(9);
+                    doc.setTextColor(brandColors.grey);
+                    doc.text('No photos attached.', margin, y + 12);
+                    y += 28;
                 }
-                y += 10;
+
+                y += 12;
             }
             await yieldToMain();
         }
@@ -612,6 +655,8 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
 
     onProgress?.('Finalizing PDF...');
     await yieldToMain();
+
+    drawFooter();
 
     const pdf = doc.output('blob');
     const fileName = formatFileName(project);
