@@ -355,15 +355,10 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
         return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
     });
 
-    // Map original snags to their sorted index for consistent numbering
+    // Map snags to sequential numbers (1, 2, 3...) based on their order in the report
+    // Use sortedSnags so the numbering matches the order they appear in the report
     const snagIndexMap = new Map<string, number>();
-    // Use the original list order for numbering if possible, or the sorted order?
-    // The user asked for "Plan numbers be changed to be the same as the numbers in the list".
-    // The list in the UI is typically sorted by creation or filtered.
-    // Ideally, we should respect the order passed in `snags` (which comes from the UI).
-    // But here we sort `sortedSnags` for grouping by floor.
-    // So we should use the index from the INPUT `snags` array.
-    snags.forEach((s, i) => snagIndexMap.set(s.id, i + 1));
+    sortedSnags.forEach((s, i) => snagIndexMap.set(s.id, i + 1));
 
     // Pass sortedSnags (or original snags) to filter plans. 
     // We use sortedSnags because that's what we are reporting on? 
@@ -638,8 +633,9 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
         return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
     });
 
+    // Map snags to sequential numbers (1, 2, 3...) based on their order in the report
     const snagIndexMap = new Map<string, number>();
-    snags.forEach((s, i) => snagIndexMap.set(s.id, i + 1));
+    sortedSnags.forEach((s, i) => snagIndexMap.set(s.id, i + 1));
 
     const children: any[] = [];
 
