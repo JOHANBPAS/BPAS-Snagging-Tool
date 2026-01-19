@@ -70,27 +70,46 @@ const SiteMode: React.FC = () => {
   React.useEffect(() => {
     if (!projectId) return;
     const fetchProject = async () => {
-      const { data } = await supabase.from("projects").select("*").eq("id", projectId).single();
-      setProject((data as Project) || null);
+      try {
+        const { data } = await supabase.from("projects").select("*").eq("id", projectId).single();
+        setProject((data as Project) || null);
+      } catch (error) {
+        console.error("[SiteMode] Error fetching project:", error);
+        setToast("Failed to load project");
+      }
     };
     const fetchPlans = async () => {
-      const { data } = await supabase
-        .from("project_plans")
-        .select("*")
-        .eq("project_id", projectId)
-        .order("order", { ascending: true });
-      const planList = (data as ProjectPlan[]) || [];
-      setPlans(planList);
-      if (planList.length > 0) {
-        setPlanId(planList[0].id);
-        setPlanUrl(planList[0].url);
+      try {
+        const { data } = await supabase
+          .from("project_plans")
+          .select("*")
+          .eq("project_id", projectId)
+          .order("order", { ascending: true });
+        const planList = (data as ProjectPlan[]) || [];
+        setPlans(planList);
+        if (planList.length > 0) {
+          setPlanId(planList[0].id);
+          setPlanUrl(planList[0].url);
+        }
+      } catch (error) {
+        console.error("[SiteMode] Error fetching plans:", error);
+        setToast("Failed to load plans");
+      }
+    };
+    const loadLocalData = async () => {
+      try {
+        await refreshSnags();
+        await refreshCounts();
+        await refreshQueueItems();
+        console.log("[SiteMode] Local data loaded successfully");
+      } catch (error) {
+        console.error("[SiteMode] Error loading local data:", error);
+        setToast("Failed to load offline data");
       }
     };
     fetchProject();
     fetchPlans();
-    refreshSnags();
-    refreshCounts();
-    refreshQueueItems();
+    loadLocalData();
   }, [projectId, refreshCounts, refreshQueueItems, refreshSnags]);
 
   React.useEffect(() => {
@@ -349,6 +368,18 @@ const SiteMode: React.FC = () => {
             className={`rounded-full px-3 py-1 text-sm font-semibold ${online ? "bg-emerald-600" : "bg-amber-500"}`}
           >
             {online ? "Online" : "Offline"} • {pendingCount.queued + pendingCount.syncing + pendingCount.failed} pending
+          </button>
+          <button
+            onClick={() => {
+              refreshSnags();
+              refreshCounts();
+              refreshQueueItems();
+              setToast("Data reloaded");
+            }}
+            className="rounded-full bg-slate-700 px-3 py-1 text-sm font-semibold hover:bg-slate-600"
+            title="Reload local data from IndexedDB"
+          >
+            ↻
           </button>
           {pendingCount.failed > 0 && (
             <div className="rounded-full bg-red-500 px-3 py-1 text-sm font-semibold">{pendingCount.failed} failed</div>
