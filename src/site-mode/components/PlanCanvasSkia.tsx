@@ -123,7 +123,7 @@ export const PlanCanvasSkia: React.FC<PlanCanvasSkiaProps> = ({
       maxPositionX={100}
       maxPositionY={100}
     >
-      {({ zoomIn, zoomOut, resetTransform, state }) => (
+      {({ zoomIn, zoomOut, resetTransform }) => (
         <div ref={containerRef} style={{ width: "100%", height: "100%", position: "relative" }}>
           <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }}>
             <canvas
