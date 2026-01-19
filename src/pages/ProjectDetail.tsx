@@ -130,12 +130,20 @@ export const ProjectDetail: React.FC = () => {
         project={project}
         snags={snags}
         action={
-          <button
-            onClick={() => navigate('/projects')}
-            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
-          >
-            Back to Projects
-          </button>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button
+              onClick={() => navigate(`/projects/${projectId}/site`)}
+              className="rounded-lg border border-slate-900 bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+            >
+              Site Mode
+            </button>
+            <button
+              onClick={() => navigate('/projects')}
+              className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            >
+              Back to Projects
+            </button>
+          </div>
         }
         onEdit={() => setIsEditingProject(true)}
         onDelete={() => setIsDeletingProject(true)}

@@ -1,0 +1,121 @@
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+export interface PlanPin {
+  id: string;
+  x: number; // 0..1
+  y: number; // 0..1
+}
+
+interface PlanCanvasSkiaProps {
+  imageUri: string;
+  pins: PlanPin[];
+  onPinPlaced: (coord: { x: number; y: number }) => void;
+  isPlacePinMode?: boolean;
+}
+
+const PIN_RADIUS = 10;
+
+export const PlanCanvasSkia: React.FC<PlanCanvasSkiaProps> = ({
+  imageUri,
+  pins,
+  onPinPlaced,
+  isPlacePinMode = false,
+}) => {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [size, setSize] = useState({ width: 1, height: 1 });
+
+  const draw = useCallback(
+    (ctx: CanvasRenderingContext2D, img: HTMLImageElement | null) => {
+      ctx.clearRect(0, 0, size.width, size.height);
+      if (img) {
+        const scale = Math.min(size.width / img.width, size.height / img.height);
+        const w = img.width * scale;
+        const h = img.height * scale;
+        const x = (size.width - w) / 2;
+        const y = (size.height - h) / 2;
+        ctx.drawImage(img, x, y, w, h);
+      }
+
+      ctx.fillStyle = "#FFB300";
+      pins.forEach((pin) => {
+        ctx.beginPath();
+        ctx.arc(pin.x * size.width, pin.y * size.height, PIN_RADIUS, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    },
+    [pins, size.height, size.width]
+  );
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const img = new Image();
+    img.src = imageUri;
+    img.onload = () => draw(ctx, img);
+    img.onerror = () => draw(ctx, null);
+    return () => {
+      img.onload = null;
+      img.onerror = null;
+    };
+  }, [draw, imageUri]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const img = new Image();
+    img.src = imageUri;
+    img.onload = () => draw(ctx, img);
+    img.onerror = () => draw(ctx, null);
+  }, [draw, imageUri, size.height, size.width]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) {
+        const { width, height } = entry.contentRect;
+        if (width > 0 && height > 0) {
+          setSize({ width, height });
+        }
+      }
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
+
+  const handleClick = useCallback(
+    (event: React.MouseEvent<HTMLCanvasElement>) => {
+      if (!isPlacePinMode) return;
+      const rect = event.currentTarget.getBoundingClientRect();
+      const x = event.clientX - rect.left;
+      const y = event.clientY - rect.top;
+      const nx = Math.max(0, Math.min(1, x / size.width));
+      const ny = Math.max(0, Math.min(1, y / size.height));
+      onPinPlaced({ x: nx, y: ny });
+    },
+    [isPlacePinMode, onPinPlaced, size.height, size.width]
+  );
+
+  const canvasStyle = useMemo(
+    () => ({ width: "100%", height: "100%", display: "block" }),
+    []
+  );
+
+  return (
+    <div ref={containerRef} style={{ width: "100%", height: "100%" }}>
+      <canvas
+        ref={canvasRef}
+        width={size.width}
+        height={size.height}
+        style={canvasStyle}
+        onClick={handleClick}
+      />
+    </div>
+  );
+};

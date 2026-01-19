@@ -7,6 +7,7 @@ import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
 import ResetPassword from './pages/auth/ResetPassword';
 import ProjectDetail from './pages/ProjectDetail';
+import SiteMode from './pages/SiteMode';
 import Projects from './pages/Projects';
 import Settings from './pages/Settings';
 import Reports from './pages/Reports';
@@ -48,6 +49,7 @@ const App = () => {
                   <Route path="dashboard" element={<Dashboard />} />
                   <Route path="projects" element={<Projects />} />
                   <Route path="projects/:projectId" element={<ProjectDetail />} />
+                  <Route path="projects/:projectId/site" element={<SiteMode />} />
                   <Route path="reports" element={<Reports />} />
                   <Route path="settings" element={<Settings />} />
                   <Route path="*" element={<Navigate to="/dashboard" replace />} />
