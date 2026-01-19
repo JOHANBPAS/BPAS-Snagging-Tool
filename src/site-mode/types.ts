@@ -1,4 +1,5 @@
 export type LocalStatus = "queued" | "syncing" | "synced" | "failed" | "draft";
+export type SnagStatus = "open" | "in_progress" | "completed" | "verified";
 
 export interface SnagRecord {
   id: string;
@@ -6,6 +7,7 @@ export interface SnagRecord {
   title: string;
   description?: string;
   assigneeId?: string;
+  status?: SnagStatus;
   coordinates?: {
     x: number; // 0..1
     y: number; // 0..1

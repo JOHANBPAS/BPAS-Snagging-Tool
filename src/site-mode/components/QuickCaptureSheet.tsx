@@ -13,6 +13,9 @@ interface QuickCaptureSheetProps {
   onSave: (draft: QuickCaptureDraft) => void;
   onVoiceToText: () => Promise<string | null> | string | null;
   onPhotoCapture: () => void;
+  photoCount?: number;
+  photoPreviews?: string[];
+  onRemovePhoto?: (index: number) => void;
 }
 
 export const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({
@@ -21,6 +24,9 @@ export const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({
   onSave,
   onVoiceToText,
   onPhotoCapture,
+  photoCount = 0,
+  photoPreviews = [],
+  onRemovePhoto,
 }) => {
   const [draft, setDraft] = useState<QuickCaptureDraft>({});
 
@@ -83,8 +89,23 @@ export const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({
         </div>
 
         <button style={styles.photoButton} onClick={onPhotoCapture}>
-          Add Photo
+          Add Photo {photoCount > 0 ? `(${photoCount})` : ""}
         </button>
+
+        {photoPreviews.length > 0 && (
+          <div style={styles.previewRow}>
+            {photoPreviews.map((src, index) => (
+              <div key={`${src}-${index}`} style={styles.previewItem}>
+                <img src={src} style={styles.previewImage} />
+                {onRemovePhoto && (
+                  <button style={styles.previewRemove} onClick={() => onRemovePhoto(index)}>
+                    ✕
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
 
         <div style={styles.footer}>
           <button style={styles.discardButton} onClick={onClose}>
@@ -179,6 +200,39 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#FFFFFF",
     fontWeight: 700,
     marginBottom: 16,
+  },
+  previewRow: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+    marginBottom: 16,
+  },
+  previewItem: {
+    position: "relative",
+    width: 72,
+    height: 72,
+    borderRadius: 8,
+    overflow: "hidden",
+    border: "2px solid #FFFFFF",
+  },
+  previewImage: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block",
+  },
+  previewRemove: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    width: 20,
+    height: 20,
+    borderRadius: 999,
+    backgroundColor: "#EF4444",
+    border: "none",
+    color: "#FFFFFF",
+    fontSize: 12,
+    cursor: "pointer",
   },
   footer: {
     display: "flex",

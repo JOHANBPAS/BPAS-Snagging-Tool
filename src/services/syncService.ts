@@ -49,7 +49,7 @@ export const syncMutations = async () => {
 
                 // Upload photos for this snag if it was an INSERT
                 if (type === 'INSERT' && table === 'snags' && realId) {
-                    await uploadPendingPhotos(realId);
+                    await uploadPendingPhotosForSnag(realId);
                 }
             }
         } catch (err) {
@@ -63,7 +63,7 @@ export const syncMutations = async () => {
     return idMappings;
 };
 
-const uploadPendingPhotos = async (snagId: string) => {
+export const uploadPendingPhotosForSnag = async (snagId: string) => {
     const photos = await getPendingPhotos(snagId);
 
     if (photos.length === 0) return;
@@ -121,7 +121,7 @@ const uploadPendingPhotos = async (snagId: string) => {
     }
 };
 
-const uploadAllPendingPhotos = async () => {
+export const uploadAllPendingPhotos = async () => {
     const photos = await getPendingPhotos();
 
     // Group by snag ID
@@ -135,6 +135,6 @@ const uploadAllPendingPhotos = async () => {
 
     // Upload each group
     for (const snagId in photosBySnag) {
-        await uploadPendingPhotos(snagId);
+        await uploadPendingPhotosForSnag(snagId);
     }
 };

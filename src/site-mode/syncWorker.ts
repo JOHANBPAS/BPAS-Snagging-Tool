@@ -5,6 +5,8 @@ interface SyncWorkerOptions {
   snagRepo: SnagRepository;
   api: SyncApi;
   isOnline: () => Promise<boolean>;
+  uploadPendingPhotosForSnag?: (snagId: string) => Promise<void>;
+  uploadAllPendingPhotos?: () => Promise<void>;
   intervalMs?: number;
 }
 
@@ -32,6 +34,8 @@ export const createSyncWorker = ({
   snagRepo,
   api,
   isOnline,
+  uploadPendingPhotosForSnag,
+  uploadAllPendingPhotos,
   intervalMs = 5000,
 }: SyncWorkerOptions) => {
   let timer: ReturnType<typeof setInterval> | null = null;
@@ -54,6 +58,9 @@ export const createSyncWorker = ({
           if (item.action === "create") {
             const result = await api.createSnag(payload);
             await snagRepo.markSynced(item.entityId, result.updatedAt);
+            if (uploadPendingPhotosForSnag) {
+              await uploadPendingPhotosForSnag(item.entityId);
+            }
           } else if (item.action === "update") {
             const result = await api.updateSnag(item.entityId, payload);
             await snagRepo.markSynced(item.entityId, result.updatedAt);
@@ -69,6 +76,10 @@ export const createSyncWorker = ({
       }
     } finally {
       isRunning = false;
+    }
+
+    if (uploadAllPendingPhotos) {
+      await uploadAllPendingPhotos();
     }
   };
 

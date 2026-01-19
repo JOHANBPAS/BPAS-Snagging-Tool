@@ -76,6 +76,17 @@ export const createSiteModeRepositories = () => {
       const results = await index.getAll("queued");
       return results.sort((a, b) => a.createdAt - b.createdAt);
     },
+    listAll: async () => {
+      const db = await getSiteModeDb();
+      const results = await db.getAll("sync_queue");
+      return results.sort((a, b) => a.createdAt - b.createdAt);
+    },
+    listByStatus: async (status: "queued" | "syncing" | "failed") => {
+      const db = await getSiteModeDb();
+      const index = db.transaction("sync_queue").store.index("status");
+      const results = await index.getAll(status);
+      return results.sort((a, b) => a.createdAt - b.createdAt);
+    },
     markSyncing: async (id: string) => {
       const db = await getSiteModeDb();
       const existing = await db.get("sync_queue", id);
