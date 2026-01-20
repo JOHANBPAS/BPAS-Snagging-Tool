@@ -586,7 +586,7 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
 
                 const hasDescription = Boolean(snag.description);
                 const descriptionLines = hasDescription
-                    ? doc.splitTextToSize(`Description: ${snag.description}`, pageWidth - margin * 2 - 32)
+                    ? doc.splitTextToSize(`Description: ${snag.description}`, pageWidth - margin * 2 - 48)
                     : [];
                 const descriptionHeight = hasDescription ? descriptionLines.length * 11 + 18 : 0;
 
@@ -605,8 +605,9 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
 
                 doc.setFontSize(12);
                 doc.setTextColor(brandColors.black);
-                doc.text(`${globalIndex}. ${snag.title}`, margin, y);
-                y += 14;
+                const titleLines = doc.splitTextToSize(`${globalIndex}. ${snag.title}`, pageWidth - margin * 2 - 20);
+                doc.text(titleLines, margin, y);
+                y += titleLines.length * 14;
                 doc.setFontSize(10);
                 doc.setTextColor(brandColors.grey);
                 doc.text(
