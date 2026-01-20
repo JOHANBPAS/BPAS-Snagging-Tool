@@ -27,6 +27,7 @@ const priorities: SnagPriority[] = ['low', 'medium', 'high', 'critical'];
 const statuses: SnagStatus[] = ['open', 'in_progress', 'completed', 'verified'];
 
 type PendingPhoto = { file: File; preview: string };
+type ExistingPhoto = { id: string; url: string };
 
 export const SnagForm: React.FC<Props> = ({
   projectId,
@@ -64,6 +65,8 @@ export const SnagForm: React.FC<Props> = ({
   const [pendingPhotos, setPendingPhotos] = useState<{ file: File; preview: string }[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [annotatingPhoto, setAnnotatingPhoto] = useState<{ index: number; src: string } | null>(null);
+  const [existingPhotos, setExistingPhotos] = useState<ExistingPhoto[]>([]);
+  const [annotatingExisting, setAnnotatingExisting] = useState<ExistingPhoto | null>(null);
   const isEditing = Boolean(initialSnag);
 
   const effectiveCoords =
@@ -84,6 +87,13 @@ export const SnagForm: React.FC<Props> = ({
         due_date: initialSnag.due_date ?? '',
         assigned_to: initialSnag.assigned_to ?? '',
       });
+
+      // Load existing photos to allow annotation while editing
+      (async () => {
+        const { data } = await supabase.from('snag_photos').select('*').eq('snag_id', initialSnag.id);
+        const rows = (data as { id: string; photo_url: string }[] | null) || [];
+        setExistingPhotos(rows.map((p) => ({ id: p.id, url: p.photo_url })));
+      })();
     }
   }, [initialSnag]);
 
@@ -460,6 +470,37 @@ export const SnagForm: React.FC<Props> = ({
         />
       )}
 
+      {annotatingExisting && (
+        <ImageAnnotator
+          imageSrc={annotatingExisting.url}
+          onCancel={() => setAnnotatingExisting(null)}
+          onSave={async (file) => {
+            const bucket = supabase.storage.from('snag-photos');
+            const path = `${initialSnag?.id || 'snag'}/${Date.now()}-annotated.jpg`;
+            const { error: uploadError } = await bucket.upload(path, file, {
+              contentType: 'image/jpeg',
+              cacheControl: '3600',
+              upsert: false,
+            });
+            if (!uploadError) {
+              const { data: urlData } = bucket.getPublicUrl(path);
+              const publicUrl = urlData.publicUrl;
+
+              if (annotatingExisting.id) {
+                await supabase.from('snag_photos').delete().eq('id', annotatingExisting.id);
+              }
+              await supabase.from('snag_photos').insert({ snag_id: initialSnag?.id || '', photo_url: publicUrl });
+
+              setExistingPhotos((prev) => [
+                ...prev.filter((p) => p.id !== annotatingExisting.id),
+                { id: publicUrl, url: publicUrl },
+              ]);
+            }
+            setAnnotatingExisting(null);
+          }}
+        />
+      )}
+
       <div className="space-y-2">
         <span className="text-sm text-slate-600">Attach photos</span>
         <input
@@ -470,7 +511,7 @@ export const SnagForm: React.FC<Props> = ({
           onChange={(e) => handlePhotoSelect(e.target.files)}
           className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-brand focus:outline-none"
         />
-        {pendingPhotos.length > 0 && (
+        {(pendingPhotos.length > 0 || existingPhotos.length > 0) && (
           <div className="flex flex-wrap gap-2">
             {pendingPhotos.map((photo, idx) => (
               <div key={photo.preview + idx} className="relative group">
@@ -489,6 +530,19 @@ export const SnagForm: React.FC<Props> = ({
                 >
                   ✕
                 </button>
+              </div>
+            ))}
+
+            {existingPhotos.map((photo) => (
+              <div key={photo.id} className="relative group">
+                <img
+                  src={photo.url}
+                  className="h-20 w-20 rounded-lg object-cover cursor-pointer border border-slate-200"
+                  onClick={() => setAnnotatingExisting(photo)}
+                />
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg pointer-events-none">
+                  <span className="text-xs text-white font-medium">Annotate</span>
+                </div>
               </div>
             ))}
           </div>

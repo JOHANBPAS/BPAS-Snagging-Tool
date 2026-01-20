@@ -517,17 +517,18 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
     if (sortedSnags.length) {
         doc.addPage();
         drawLetterhead(doc);
-        let y = 200; // Start lower to avoid header overlay
+        const safeTop = margin + 160;
+        let y = safeTop; // Start lower to avoid header overlay
         doc.setFontSize(16);
         doc.setTextColor(brandColors.black);
         doc.text('Snag photos', margin, y);
         y += 30;
 
         const ensureSpace = (heightNeeded: number) => {
-            if (y + heightNeeded > pageHeight - 120) {
+            if (y + heightNeeded > pageHeight - 140) {
                 doc.addPage();
                 drawLetterhead(doc);
-                y = 200; // Keep consistent safe zone
+                y = safeTop; // Keep consistent safe zone
             }
         };
 
@@ -582,8 +583,8 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                 const rows = Math.ceil(totalImages / 2);
 
                 const hasDescription = Boolean(snag.description);
-                const imagesHeight = rows * (imgHeight + 26);
-                const blockHeight = 28 + 16 + (hasDescription ? 16 : 0) + (totalImages > 0 ? imagesHeight : 18) + 12;
+                const imagesHeight = rows * (imgHeight + 30);
+                const blockHeight = 32 + 18 + (hasDescription ? 22 : 0) + (totalImages > 0 ? imagesHeight : 22) + 14;
 
                 ensureSpace(blockHeight + 12);
 
@@ -611,14 +612,14 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                     margin,
                     y,
                 );
-                y += 18;
+                y += 20;
 
                 if (hasDescription) {
                     doc.setFontSize(9);
                     doc.setTextColor(brandColors.black);
                     const descriptionText = doc.splitTextToSize(`Description: ${snag.description}`, pageWidth - margin * 2 - 10);
-                    doc.text(descriptionText, margin, y + 10);
-                    y += descriptionText.length * 10 + 4;
+                    doc.text(descriptionText, margin, y + 12);
+                    y += descriptionText.length * 11 + 6;
                 }
 
                 doc.setTextColor(brandColors.black);
@@ -631,23 +632,23 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                     imageItems.forEach((img, idx) => {
                         const col = idx % 2;
                         const row = Math.floor(idx / 2);
-                        const x = margin + col * (imgWidth + 16);
-                        const yPos = y + 16 + row * (imgHeight + 26);
+                        const x = margin + col * (imgWidth + 18);
+                        const yPos = y + 18 + row * (imgHeight + 30);
                         doc.setFontSize(8);
                         doc.setTextColor(brandColors.grey);
-                        doc.text(img.label, x, yPos - 6);
+                        doc.text(img.label, x, yPos - 8);
                         doc.addImage(img.src, 'JPEG', x, yPos, imgWidth, imgHeight);
                     });
 
-                    y += 16 + rows * (imgHeight + 26);
+                    y += 18 + rows * (imgHeight + 30);
                 } else {
                     doc.setFontSize(9);
                     doc.setTextColor(brandColors.grey);
-                    doc.text('No photos attached.', margin, y + 12);
-                    y += 28;
+                    doc.text('No photos attached.', margin, y + 14);
+                    y += 32;
                 }
 
-                y += 12;
+                y += 16;
             }
             await yieldToMain();
         }
@@ -941,47 +942,31 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
                 }),
                 new Paragraph({
                     children: [
-                        new TextRun({
-                            text: "Location: ",
-                            bold: true,
-                        }),
+                        new TextRun({ text: "Location: ", bold: true }),
                         new TextRun(snag.location || '—'),
-                        new TextRun({
-                            text: " | Status: ",
-                            bold: true,
-                        }),
+                        new TextRun({ text: " | Status: ", bold: true }),
                         new TextRun(snag.status),
-                        new TextRun({
-                            text: " | Priority: ",
-                            bold: true,
-                        }),
+                        new TextRun({ text: " | Priority: ", bold: true }),
                         new TextRun(snag.priority),
                         ...(snag.due_date ? [
-                            new TextRun({
-                                text: " | Due: ",
-                                bold: true,
-                            }),
-                            new TextRun(snag.due_date)
+                            new TextRun({ text: " | Due: ", bold: true }),
+                            new TextRun(snag.due_date),
                         ] : []),
                     ],
-                    spacing: { after: 200 },
-                })
+                    spacing: { after: 150 },
+                }),
+                ...(snag.description
+                    ? [
+                        new Paragraph({
+                            children: [
+                                new TextRun({ text: "Description: ", bold: true }),
+                                new TextRun(snag.description),
+                            ],
+                            spacing: { after: 200 },
+                        }),
+                    ]
+                    : []),
             );
-
-            if (snag.description) {
-                children.push(
-                    new Paragraph({
-                        children: [
-                            new TextRun({
-                                text: "Description: ",
-                                bold: true,
-                            }),
-                            new TextRun(snag.description),
-                        ],
-                        spacing: { after: 200 },
-                    })
-                );
-            }
 
             const images: any[] = [];
             if (locationSnippet) {

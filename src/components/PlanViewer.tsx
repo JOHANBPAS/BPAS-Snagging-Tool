@@ -223,7 +223,7 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
         (isPdf ? pdfDoc : imagePlan) ? (
           <TransformWrapper
             ref={transformComponentRef}
-            initialScale={1}
+            initialScale={0.9}
             minScale={0.5}
             maxScale={4}
             centerOnInit
@@ -231,7 +231,7 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
             panning={{
               velocityDisabled: true,
             }}
-            limitToBounds={false}
+            limitToBounds
             centerZoomedOut
             doubleClick={{ disabled: true }}
             onTransformed={(ref, state) => {
@@ -277,7 +277,7 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
 
                 <div
                   ref={containerRef}
-                  className="relative h-[50vh] md:h-auto md:aspect-[16/9] w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
+                  className="relative h-[70vh] md:h-auto md:aspect-[16/9] w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
                 >
                   <TransformComponent
                     wrapperClass="!w-full !h-full"
