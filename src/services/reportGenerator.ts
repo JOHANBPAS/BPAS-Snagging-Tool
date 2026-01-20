@@ -674,6 +674,9 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
         },
     });
 
+
+        // After floor plans, move back to portrait for summaries/details
+        doc.addPage('a4', 'p');
     onProgress?.('Processing snag details with photos...');
     await yieldToMain();
 
@@ -794,8 +797,8 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
             } else {
                 consumedHeight += 10;
             }
-            
-            return consumedHeight + 5; // padding to avoid overlap with following blocks
+
+            return consumedHeight + 10; // padding to avoid overlap with following blocks
         };
 
         // Helper: Render images in grid layout (2 per row)
@@ -890,7 +893,7 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                     : 0;
                 
                 // Total estimated card height
-                const estimatedCardHeight = titleHeightEstimate + 20 /* badges */ + 20 /* metadata */ + descriptionHeight + imageHeight + 20;
+                const estimatedCardHeight = titleHeightEstimate + 20 /* badges */ + 20 /* metadata */ + descriptionHeight + imageHeight + 30; // extra padding to avoid edge overlap
                 
                 // Check page break BEFORE drawing the card
                 ensureSpace(estimatedCardHeight + 10);
