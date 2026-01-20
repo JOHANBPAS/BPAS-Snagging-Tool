@@ -680,22 +680,154 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
     // Process snag detail cards with photos
     if (sortedSnags.length) {
         doc.addPage();
-        const safeTop = margin + 60; // larger safe zone to avoid header overlap
-        let y = safeTop;
+        const safeTop = margin + 60;
+        const pageBottomMargin = pageHeight - (margin + 80);
+        let currentY = safeTop;
         
         doc.setFontSize(16);
         doc.setTextColor(brandColors.black);
-        doc.text('Snag Details', margin, y);
-        y += 25;
+        doc.text('Snag Details', margin, currentY);
+        currentY += 25;
 
-        const ensureSpace = (heightNeeded: number) => {
-            const pageNum = doc.getNumberOfPages();
-            // Keep at least 80pt buffer from footer
-            if (y + heightNeeded > pageHeight - (margin + 80)) {
+        // Helper function to check if content fits and add page if needed
+        const ensureSpace = (heightNeeded: number): void => {
+            if (currentY + heightNeeded > pageBottomMargin) {
                 doc.addPage();
                 drawSlimHeader(doc, project.name, doc.getNumberOfPages(), doc.getNumberOfPages());
-                y = safeTop;
+                currentY = safeTop;
             }
+        };
+
+        // Helper: Render snag title and get height consumed
+        const renderTitle = (title: string, globalIndex: number): number => {
+            doc.setFontSize(12);
+            doc.setTextColor(brandColors.black);
+            doc.setFont('helvetica', 'bold');
+            const titleLines = doc.splitTextToSize(`${globalIndex}. ${title}`, pageWidth - margin * 2 - 20);
+            doc.text(titleLines, margin, currentY + 8);
+            const titleHeight = titleLines.length * 12 + 14;
+            return titleHeight;
+        };
+
+        // Helper: Render status and priority badges, return height consumed
+        const renderBadges = (status: string, priority: string): number => {
+            const badgeHeight = 12;
+            const badgePadding = 4;
+            
+            doc.setFontSize(8);
+            const statusColor = getStatusColor(status);
+            const priorityColor = getPriorityColor(priority);
+            
+            const statusText = (status || 'open').toUpperCase();
+            const statusWidth = doc.getTextWidth(statusText) + badgePadding * 2;
+            
+            doc.setFillColor(...statusColor);
+            doc.roundedRect(margin, currentY - 4, statusWidth, badgeHeight, 2, 2, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.text(statusText, margin + statusWidth / 2, currentY + 2, { align: 'center', baseline: 'middle' });
+            
+            const priorityText = (priority || 'medium').toUpperCase();
+            const priorityWidth = doc.getTextWidth(priorityText) + badgePadding * 2;
+            const priorityX = margin + statusWidth + 8;
+            
+            doc.setFillColor(...priorityColor);
+            doc.roundedRect(priorityX, currentY - 4, priorityWidth, badgeHeight, 2, 2, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.text(priorityText, priorityX + priorityWidth / 2, currentY + 2, { align: 'center', baseline: 'middle' });
+            
+            return badgeHeight + 8;
+        };
+
+        // Helper: Render metadata (location and due date) in stacked layout
+        const renderMetadata = (location: string, dueDate: string): number => {
+            doc.setFontSize(7);
+            doc.setTextColor(brandColors.grey);
+            
+            // Location section
+            doc.text('LOCATION', margin + 80, currentY - 2);
+            doc.setFontSize(8);
+            doc.setTextColor(brandColors.black);
+            const locationText = formatFieldValue(location);
+            doc.text(locationText, margin + 80, currentY + 6, { maxWidth: 120 });
+            
+            // Due date section (right-aligned)
+            doc.setFontSize(7);
+            doc.setTextColor(brandColors.grey);
+            doc.text('DUE DATE', pageWidth - margin - 60, currentY - 2);
+            doc.setFontSize(8);
+            doc.setTextColor(brandColors.black);
+            const dueText = dueDate || 'Not Set';
+            doc.text(dueText, pageWidth - margin - 60, currentY + 6);
+            
+            return 20; // Metadata row height
+        };
+
+        // Helper: Render description with text wrapping and max height constraint
+        const renderDescription = (description: string | null | undefined): number => {
+            if (!description) return 0;
+            
+            const descriptionLines = doc.splitTextToSize(description, pageWidth - margin * 2 - 20);
+            const maxDescriptionLines = 50;
+            const limitedLines = descriptionLines.slice(0, maxDescriptionLines);
+            const isTruncated = descriptionLines.length > maxDescriptionLines;
+            
+            // Description label
+            doc.setFontSize(9);
+            doc.setTextColor(107, 114, 128);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Description:', margin + 10, currentY);
+            
+            // Description text
+            currentY += 10;
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(brandColors.black);
+            doc.text(limitedLines, margin + 10, currentY);
+            
+            let consumedHeight = 10 + limitedLines.length * 10;
+            
+            if (isTruncated) {
+                currentY += limitedLines.length * 10 + 5;
+                doc.setTextColor(150, 155, 160);
+                doc.setFont('helvetica', 'italic');
+                doc.text('(Description truncated - see full details in system)', margin + 10, currentY);
+                consumedHeight += 15;
+            } else {
+                consumedHeight += 10;
+            }
+            
+            return consumedHeight;
+        };
+
+        // Helper: Render images in grid layout (2 per row)
+        const renderImages = (imageItems: Array<{ src: string; label: string }>): number => {
+            if (imageItems.length === 0) return 0;
+            
+            const imgWidth = (pageWidth - margin * 2 - 40) / 2;
+            const imgHeight = 120;
+            const rowHeight = imgHeight + 25;
+            const numRows = Math.ceil(imageItems.length / 2);
+            
+            let imageY = currentY + 5;
+            
+            for (let imgIdx = 0; imgIdx < imageItems.length; imgIdx++) {
+                const col = imgIdx % 2;
+                const row = Math.floor(imgIdx / 2);
+                const imgX = margin + 10 + col * (imgWidth + 15);
+                const imgY = imageY + row * rowHeight;
+                
+                // Image label
+                doc.setFontSize(8);
+                doc.setTextColor(107, 114, 128);
+                doc.text(imageItems[imgIdx].label, imgX, imgY - 5);
+                
+                // Image with border
+                doc.setDrawColor(200, 210, 220);
+                doc.setLineWidth(0.5);
+                doc.rect(imgX, imgY, imgWidth, imgHeight);
+                doc.addImage(imageItems[imgIdx].src, 'JPEG', imgX, imgY, imgWidth, imgHeight);
+            }
+            
+            return numRows * rowHeight;
         };
 
         const BATCH_SIZE = 3; // Process 3 snags at a time
@@ -709,7 +841,7 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                 const photos: string[] = [];
 
                 if (photoRows && photoRows.length > 0) {
-                    const photoPromises = photoRows.slice(0, 2).map(async (row) => { // Limit to 2 photos per snag
+                    const photoPromises = photoRows.slice(0, 3).map(async (row) => { // Allow up to 3 photos
                         const imgData = await toDataUrl(row.photo_url);
                         if (imgData) {
                             return await downscaleImage(imgData, 1200, 0.7);
@@ -739,152 +871,64 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
             for (const { snag, photos, locationSnippet } of batchResults) {
                 const globalIndex = snagIndexMap.get(snag.id) || 0;
 
-                // Calculate card height for dynamic sizing
-                const hasDescription = Boolean(snag.description);
-                const descriptionLines = hasDescription
-                    ? doc.splitTextToSize(snag.description!, pageWidth - margin * 2 - 20)
+                // Pre-calculate card height for page break logic
+                const descriptionLines = snag.description
+                    ? doc.splitTextToSize(snag.description, pageWidth - margin * 2 - 20)
                     : [];
-                const descriptionHeight = hasDescription ? descriptionLines.length * 10 + 10 : 0;
-
-                const hasPhotos = photos.length > 0;
-                const hasSnippet = !!locationSnippet;
-                const totalImages = (hasSnippet ? 1 : 0) + photos.length;
+                const descriptionHeight = descriptionLines.length > 0 
+                    ? Math.min(descriptionLines.length, 50) * 10 + 20 
+                    : 0;
                 
-                const imageHeight = totalImages > 0 ? 120 : 0;
+                const imageItems: Array<{ src: string; label: string }> = [];
+                if (locationSnippet) imageItems.push({ src: locationSnippet, label: 'Location on Plan' });
+                photos.forEach((photo, idx) => imageItems.push({ src: photo, label: `Photo ${idx + 1}` }));
+                
+                const imageHeight = imageItems.length > 0 
+                    ? Math.ceil(imageItems.length / 2) * (120 + 25)
+                    : 0;
+                
+                // Total estimated card height
+                const estimatedCardHeight = 8 + 12 + 20 + descriptionHeight + imageHeight + 20;
+                
+                // Check page break BEFORE drawing the card
+                ensureSpace(estimatedCardHeight + 10);
 
-                // Dynamic card height based on content
-                const cardHeight = 60 + descriptionHeight + imageHeight + 30; // extra breathing room to avoid overlaps
-
-                ensureSpace(cardHeight + 10);
-
-                // Card background with rounded corners
+                // Draw card background
                 const cardX = margin - 10;
                 const cardW = pageWidth - margin * 2 + 20;
-                const cardY = y - 8;
-                doc.setFillColor(248, 250, 252);
-                doc.roundedRect(cardX, cardY, cardW, cardHeight + 16, 4, 4, 'F');
+                const cardStartY = currentY - 8;
                 
-                // Card border
+                doc.setFillColor(248, 250, 252);
+                doc.roundedRect(cardX, cardStartY, cardW, estimatedCardHeight + 16, 4, 4, 'F');
+                
                 doc.setDrawColor(226, 232, 240);
                 doc.setLineWidth(0.5);
-                doc.roundedRect(cardX, cardY, cardW, cardHeight + 16, 4, 4, 'S');
+                doc.roundedRect(cardX, cardStartY, cardW, estimatedCardHeight + 16, 4, 4, 'S');
 
-                // Snag number and title
-                doc.setFontSize(12);
-                doc.setTextColor(brandColors.black);
-                const titleLines = doc.splitTextToSize(`${globalIndex}. ${snag.title}`, pageWidth - margin * 2 - 20);
-                doc.text(titleLines, margin, y + 8);
-                y += titleLines.length * 12 + 14; // extra spacing under title
+                // Render title
+                const titleHeight = renderTitle(snag.title, globalIndex);
+                currentY += titleHeight;
 
-                // Metadata in a cleaner 2-column layout
-                doc.setFontSize(9);
-                const priorityColor = getPriorityColor(snag.priority);
-                const statusColor = getStatusColor(snag.status);
-                
-                // Status badge with proper vertical centering
-                const badgeHeight = 12;
-                const badgePadding = 4;
-                const statusText = (snag.status || 'open').toUpperCase();
-                doc.setFontSize(8);
-                const statusWidth = doc.getTextWidth(statusText) + badgePadding * 2;
-                
-                doc.setFillColor(...statusColor);
-                doc.roundedRect(margin, y - 4, statusWidth, badgeHeight, 2, 2, 'F');
-                doc.setTextColor(255, 255, 255);
-                doc.text(statusText, margin + statusWidth / 2, y + 2, { align: 'center', baseline: 'middle' });
-                
-                // Priority badge with proper vertical centering
-                const priorityText = (snag.priority || 'medium').toUpperCase();
-                const priorityWidth = doc.getTextWidth(priorityText) + badgePadding * 2;
-                const priorityX = margin + statusWidth + 8;
-                
-                doc.setFillColor(...priorityColor);
-                doc.roundedRect(priorityX, y - 4, priorityWidth, badgeHeight, 2, 2, 'F');
-                doc.setTextColor(255, 255, 255);
-                doc.text(priorityText, priorityX + priorityWidth / 2, y + 2, { align: 'center', baseline: 'middle' });
-                
-                // Location - stacked layout to prevent overlap
-                const metadataStartX = margin + statusWidth + priorityWidth + 20;
-                doc.setTextColor(brandColors.grey);
-                doc.setFontSize(7);
-                doc.text('LOCATION', metadataStartX, y - 2);
-                doc.setFontSize(8);
-                doc.setTextColor(brandColors.black);
-                const locationText = formatFieldValue(snag.location);
-                doc.text(locationText, metadataStartX, y + 6, { maxWidth: 120 });
-                
-                // Due date - stacked layout on the right
-                const dueDateX = pageWidth - margin - 60;
-                doc.setFontSize(7);
-                doc.setTextColor(brandColors.grey);
-                doc.text('DUE DATE', dueDateX, y - 2);
-                doc.setFontSize(8);
-                doc.setTextColor(brandColors.black);
-                const dueText = snag.due_date || 'Not Set';
-                doc.text(dueText, dueDateX, y + 6);
-                
-                y += 20; // increased spacing for stacked metadata layout
+                // Render badges
+                const badgeHeight = renderBadges(snag.status || 'open', snag.priority || 'medium');
+                currentY += badgeHeight;
 
-                // Description with clear demarcation and max-height constraint
-                if (hasDescription) {
-                    doc.setFontSize(9);
-                    doc.setTextColor(107, 114, 128);
-                    doc.setFont('helvetica', 'bold');
-                    doc.text('Description:', margin + 10, y);
-                    
-                    y += 10;
-                    doc.setFont('helvetica', 'normal');
-                    doc.setTextColor(brandColors.black);
-                    
-                    // Limit description to max 50 lines (~150px equivalent) to prevent card overflow
-                    const maxDescriptionLines = 50;
-                    const limitedLines = descriptionLines.slice(0, maxDescriptionLines);
-                    const isTruncated = descriptionLines.length > maxDescriptionLines;
-                    
-                    doc.text(limitedLines, margin + 10, y);
-                    y += limitedLines.length * 10;
-                    
-                    if (isTruncated) {
-                        doc.setTextColor(150, 155, 160);
-                        doc.setFont('helvetica', 'italic');
-                        doc.text('(Description truncated - see full details in system)', margin + 10, y + 5);
-                        y += 10;
-                    }
-                    y += 10;
+                // Render metadata
+                const metadataHeight = renderMetadata(snag.location || '', snag.due_date || '');
+                currentY += metadataHeight;
+
+                // Render description
+                const descHeight = renderDescription(snag.description);
+                currentY += descHeight;
+
+                // Render images
+                if (imageItems.length > 0) {
+                    const imgHeight = renderImages(imageItems);
+                    currentY += imgHeight;
                 }
 
-                // Images side-by-side
-                if (totalImages > 0) {
-                    y += 5;
-                    const imgWidth = (pageWidth - margin * 2 - 40) / 2; // Two columns
-                    const imgHeight = 120; // controlled height to prevent bleed
-
-                    const imageItems: Array<{ src: string; label: string }> = [];
-                    if (locationSnippet) imageItems.push({ src: locationSnippet, label: 'Location on Plan' });
-                    photos.forEach((photo, idx) => imageItems.push({ src: photo, label: `Photo ${idx + 1}` }));
-
-                    for (let imgIdx = 0; imgIdx < imageItems.length; imgIdx++) {
-                        const col = imgIdx % 2;
-                        const row = Math.floor(imgIdx / 2);
-                        const imgX = margin + 10 + col * (imgWidth + 15);
-                        const imgY = y + row * (imgHeight + 25);
-
-                        // Image label
-                        doc.setFontSize(8);
-                        doc.setTextColor(107, 114, 128);
-                        doc.text(imageItems[imgIdx].label, imgX, imgY - 5);
-
-                        // Image with border
-                        doc.setDrawColor(200, 210, 220);
-                        doc.setLineWidth(0.5);
-                        doc.rect(imgX, imgY, imgWidth, imgHeight);
-                        doc.addImage(imageItems[imgIdx].src, 'JPEG', imgX, imgY, imgWidth, imgHeight);
-                    }
-                    
-                    y += Math.ceil(imageItems.length / 2) * (imgHeight + 25);
-                }
-
-                y += 20; // Spacing between cards to avoid bleed
+                // Spacing between cards
+                currentY += 20;
             }
             await yieldToMain();
         }
