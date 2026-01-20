@@ -590,8 +590,8 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
     onProgress?.('Generating snag list...');
     await yieldToMain();
 
-    // Snag list always on a fresh page to avoid overlap with executive summary
-    doc.addPage();
+    // Switch back to portrait and add snag list page
+    doc.addPage('a4', 'p');
     const listPageNum = doc.getNumberOfPages();
     drawSlimHeader(doc, project.name, listPageNum, doc.getNumberOfPages());
     
@@ -773,13 +773,13 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
             doc.setFontSize(9);
             doc.setTextColor(107, 114, 128);
             doc.setFont('helvetica', 'bold');
-            doc.text('Description:', margin + 10, currentY);
+            doc.text('Description:', margin, currentY);
             
             // Description text
             currentY += 10;
             doc.setFont('helvetica', 'normal');
             doc.setTextColor(brandColors.black);
-            doc.text(limitedLines, margin + 10, currentY);
+            doc.text(limitedLines, margin, currentY);
             
             let consumedHeight = 10 + limitedLines.length * 10;
             
