@@ -598,11 +598,13 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
     onProgress?.('Generating snag list...');
     await yieldToMain();
 
-    // Snag list starts on its own page
+    // Snag list always on a fresh page to avoid overlap with executive summary
+    doc.addPage();
     const listPageNum = doc.getNumberOfPages();
     drawSlimHeader(doc, project.name, listPageNum, doc.getNumberOfPages());
     
-    let listStartY = margin + 50;
+    // Generous top padding to clear header and any background artifacts
+    let listStartY = margin + 80;
 
     doc.setFontSize(16);
     doc.setTextColor(brandColors.black);
@@ -669,7 +671,8 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                 data.cell.styles.textColor = [255, 255, 255];
             }
         },
-        margin: { top: 10, bottom: 40, left: margin, right: margin },
+        // Extra top/bottom margin to respect header/footer safety zones
+        margin: { top: margin + 30, bottom: margin + 40, left: margin, right: margin },
         didDrawPage: (data) => {
             // Draw slim header on each page
             const pageNum = doc.getNumberOfPages();
@@ -683,7 +686,7 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
     // Process snag detail cards with photos
     if (sortedSnags.length) {
         doc.addPage();
-        const safeTop = margin + 40;
+        const safeTop = margin + 60; // larger safe zone to avoid header overlap
         let y = safeTop;
         
         doc.setFontSize(16);
@@ -693,7 +696,8 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
 
         const ensureSpace = (heightNeeded: number) => {
             const pageNum = doc.getNumberOfPages();
-            if (y + heightNeeded > pageHeight - 60) {
+            // Keep at least 80pt buffer from footer
+            if (y + heightNeeded > pageHeight - (margin + 80)) {
                 doc.addPage();
                 drawSlimHeader(doc, project.name, doc.getNumberOfPages(), doc.getNumberOfPages());
                 y = safeTop;
@@ -755,7 +759,7 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                 const imageHeight = totalImages > 0 ? 120 : 0;
 
                 // Dynamic card height based on content
-                const cardHeight = 50 + descriptionHeight + imageHeight + 20; // title + desc + images + padding
+                const cardHeight = 60 + descriptionHeight + imageHeight + 30; // extra breathing room to avoid overlaps
 
                 ensureSpace(cardHeight + 10);
 
@@ -776,7 +780,7 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                 doc.setTextColor(brandColors.black);
                 const titleLines = doc.splitTextToSize(`${globalIndex}. ${snag.title}`, pageWidth - margin * 2 - 20);
                 doc.text(titleLines, margin, y + 8);
-                y += titleLines.length * 12 + 10;
+                y += titleLines.length * 12 + 14; // extra spacing under title
 
                 // Metadata in a cleaner 2-column layout
                 doc.setFontSize(9);
@@ -801,7 +805,7 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                 doc.setFontSize(8);
                 doc.text('Location:', margin + 80, y, { maxWidth: 60 });
                 doc.setTextColor(brandColors.black);
-                doc.text(formatFieldValue(snag.location), margin + 140, y, { maxWidth: 100 });
+                doc.text(formatFieldValue(snag.location), margin + 140, y, { maxWidth: 140 });
                 
                 // Due date (right aligned)
                 doc.setTextColor(brandColors.grey);
@@ -809,7 +813,7 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                 doc.setTextColor(brandColors.black);
                 doc.text(snag.due_date || 'Not Set', pageWidth - margin - 30, y, { align: 'right' });
                 
-                y += 12;
+                y += 16; // taller line-height for metadata row
 
                 // Description with clear demarcation
                 if (hasDescription) {
@@ -822,14 +826,14 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                     doc.setFont('helvetica', 'normal');
                     doc.setTextColor(brandColors.black);
                     doc.text(descriptionLines, margin + 10, y);
-                    y += descriptionLines.length * 10 + 5;
+                    y += descriptionLines.length * 10 + 10;
                 }
 
                 // Images side-by-side
                 if (totalImages > 0) {
                     y += 5;
                     const imgWidth = (pageWidth - margin * 2 - 40) / 2; // Two columns
-                    const imgHeight = 100;
+                    const imgHeight = 120; // controlled height to prevent bleed
 
                     const imageItems: Array<{ src: string; label: string }> = [];
                     if (locationSnippet) imageItems.push({ src: locationSnippet, label: 'Location on Plan' });
@@ -856,7 +860,7 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                     y += Math.ceil(imageItems.length / 2) * (imgHeight + 25);
                 }
 
-                y += 15; // Spacing between cards
+                y += 20; // Spacing between cards to avoid bleed
             }
             await yieldToMain();
         }
