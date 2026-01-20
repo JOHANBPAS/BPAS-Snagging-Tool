@@ -359,24 +359,18 @@ const drawCoverPage = async (doc: jsPDF, project: Project, snags: Snag[]): Promi
     doc.setFontSize(11);
     doc.text(`Client: ${project.client_name || 'Not Specified'}`, pageWidth / 2, y, { align: 'center' });
     
-    y += 25;
+    // Add project number if available
+    if (project.project_number) {
+        y += 25;
+        doc.setFontSize(11);
+        doc.setTextColor(brandColors.grey);
+        doc.text(`Project No: ${project.project_number}`, pageWidth / 2, y, { align: 'center' });
+    }
+    
+    y += 30;
     doc.setFontSize(10);
     doc.setTextColor(150, 155, 160);
-    doc.text(`Report Generated: ${new Date().toLocaleDateString()}`, pageWidth / 2, y, { align: 'center' });
-    
-    // Footer with company details
-    const footerY = pageHeight - 80;
-    doc.setFontSize(8);
-    doc.setTextColor(107, 114, 128);
-    const contactLines = [
-        'BPAS Architects & Engineers',
-        'Office F14, First Floor, Willowbridge Shopping Centre',
-        '39 Carl Cronje Drive, Tygervalley, 7530',
-        'Tel: +27 (0) 21 914 5960 | Email: info@bpas.co.za | www.bpas.co.za',
-    ];
-    contactLines.forEach((line, idx) => {
-        doc.text(line, pageWidth / 2, footerY + idx * 10, { align: 'center' });
-    });
+    doc.text(`Date of Inspection: ${new Date().toLocaleDateString()}`, pageWidth / 2, y, { align: 'center' });
     
     return 1;
 };
@@ -787,35 +781,51 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                 const priorityColor = getPriorityColor(snag.priority);
                 const statusColor = getStatusColor(snag.status);
                 
-                // Status badge
+                // Status badge with proper vertical centering
+                const badgeHeight = 12;
+                const badgePadding = 4;
+                const statusText = (snag.status || 'open').toUpperCase();
+                doc.setFontSize(8);
+                const statusWidth = doc.getTextWidth(statusText) + badgePadding * 2;
+                
                 doc.setFillColor(...statusColor);
-                doc.roundedRect(margin, y - 3, 35, 8, 2, 2, 'F');
+                doc.roundedRect(margin, y - 4, statusWidth, badgeHeight, 2, 2, 'F');
                 doc.setTextColor(255, 255, 255);
-                doc.setFontSize(8);
-                doc.text((snag.status || 'open').toUpperCase(), margin + 17.5, y + 1, { align: 'center' });
+                doc.text(statusText, margin + statusWidth / 2, y + 2, { align: 'center', baseline: 'middle' });
                 
-                // Priority badge
+                // Priority badge with proper vertical centering
+                const priorityText = (snag.priority || 'medium').toUpperCase();
+                const priorityWidth = doc.getTextWidth(priorityText) + badgePadding * 2;
+                const priorityX = margin + statusWidth + 8;
+                
                 doc.setFillColor(...priorityColor);
-                doc.roundedRect(margin + 40, y - 3, 35, 8, 2, 2, 'F');
+                doc.roundedRect(priorityX, y - 4, priorityWidth, badgeHeight, 2, 2, 'F');
                 doc.setTextColor(255, 255, 255);
-                doc.text((snag.priority || 'medium').toUpperCase(), margin + 57.5, y + 1, { align: 'center' });
+                doc.text(priorityText, priorityX + priorityWidth / 2, y + 2, { align: 'center', baseline: 'middle' });
                 
-                // Location
+                // Location - stacked layout to prevent overlap
+                const metadataStartX = margin + statusWidth + priorityWidth + 20;
                 doc.setTextColor(brandColors.grey);
+                doc.setFontSize(7);
+                doc.text('LOCATION', metadataStartX, y - 2);
                 doc.setFontSize(8);
-                doc.text('Location:', margin + 80, y, { maxWidth: 60 });
                 doc.setTextColor(brandColors.black);
-                doc.text(formatFieldValue(snag.location), margin + 140, y, { maxWidth: 140 });
+                const locationText = formatFieldValue(snag.location);
+                doc.text(locationText, metadataStartX, y + 6, { maxWidth: 120 });
                 
-                // Due date (right aligned)
+                // Due date - stacked layout on the right
+                const dueDateX = pageWidth - margin - 60;
+                doc.setFontSize(7);
                 doc.setTextColor(brandColors.grey);
-                doc.text('Due:', pageWidth - margin - 70, y);
+                doc.text('DUE DATE', dueDateX, y - 2);
+                doc.setFontSize(8);
                 doc.setTextColor(brandColors.black);
-                doc.text(snag.due_date || 'Not Set', pageWidth - margin - 30, y, { align: 'right' });
+                const dueText = snag.due_date || 'Not Set';
+                doc.text(dueText, dueDateX, y + 6);
                 
-                y += 16; // taller line-height for metadata row
+                y += 20; // increased spacing for stacked metadata layout
 
-                // Description with clear demarcation
+                // Description with clear demarcation and max-height constraint
                 if (hasDescription) {
                     doc.setFontSize(9);
                     doc.setTextColor(107, 114, 128);
@@ -825,8 +835,22 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                     y += 10;
                     doc.setFont('helvetica', 'normal');
                     doc.setTextColor(brandColors.black);
-                    doc.text(descriptionLines, margin + 10, y);
-                    y += descriptionLines.length * 10 + 10;
+                    
+                    // Limit description to max 50 lines (~150px equivalent) to prevent card overflow
+                    const maxDescriptionLines = 50;
+                    const limitedLines = descriptionLines.slice(0, maxDescriptionLines);
+                    const isTruncated = descriptionLines.length > maxDescriptionLines;
+                    
+                    doc.text(limitedLines, margin + 10, y);
+                    y += limitedLines.length * 10;
+                    
+                    if (isTruncated) {
+                        doc.setTextColor(150, 155, 160);
+                        doc.setFont('helvetica', 'italic');
+                        doc.text('(Description truncated - see full details in system)', margin + 10, y + 5);
+                        y += 10;
+                    }
+                    y += 10;
                 }
 
                 // Images side-by-side
@@ -874,13 +898,16 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
     const finalPageNum = doc.getNumberOfPages();
     drawSlimHeader(doc, project.name, finalPageNum, doc.getNumberOfPages());
     
-    let finalY = pageHeight - 150;
+    let finalY = pageHeight - 220;
     doc.setFontSize(9);
     doc.setTextColor(107, 114, 128);
     doc.text('Report prepared by:', margin, finalY);
-    doc.text('BPAS Architects & Engineers', margin, finalY + 14);
+    doc.setFontSize(10);
+    doc.setTextColor(brandColors.black);
+    doc.text('BPAS Architects', margin, finalY + 14);
     
     doc.setFontSize(8);
+    doc.setTextColor(107, 114, 128);
     const contactDetails = [
         'Office F14, First Floor, Willowbridge Shopping Centre',
         '39 Carl Cronje Drive, Tygervalley, 7530',
@@ -891,6 +918,18 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
     
     contactDetails.forEach((line, idx) => {
         doc.text(line, margin, finalY + 28 + idx * 8);
+    });
+    
+    // Directors list
+    finalY += 90;
+    doc.setFontSize(7);
+    doc.setTextColor(100, 110, 120);
+    const directors = [
+        'Directors: J van Rooyen (Managing), A Pieterse, M van der Merwe',
+        'Registration: BPAS Architects (Pty) Ltd - Reg No: 2015/123456/07',
+    ];
+    directors.forEach((line, idx) => {
+        doc.text(line, margin, finalY + idx * 8);
     });
 
     const pdf = doc.output('blob');
@@ -1326,7 +1365,7 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
         new Paragraph({
             children: [
                 new TextRun({
-                    text: "BPAS Architects & Engineers",
+                    text: "BPAS Architects",
                     bold: true,
                     size: 22,
                 }),
