@@ -311,17 +311,17 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
             const size = doc.internal.pageSize;
             const w = size.getWidth();
             const h = size.getHeight();
-            const footerY = h - 28;
+            const footerY = h - 22;
             doc.setFontSize(8);
             doc.setTextColor(110, 110, 110);
-            doc.text('BPAS Architects • www.bpas.co.za', margin, footerY);
+            // Branding text removed (already on background). Keep page number only.
             doc.text(`Page ${i} of ${totalPages}`, w - margin, footerY, { align: 'right' });
         }
     };
 
     drawLetterhead(doc);
 
-    const contentStartY = 150;
+    const contentStartY = 190; // Raise start to avoid background header overlap
     doc.setFontSize(18);
     doc.setTextColor(brandColors.black);
     doc.text('BPAS Snagging Report', margin, contentStartY);
@@ -462,14 +462,14 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
     // If we added floor plans (which add pages), we need to reset for a new page
     if (floorPlans.length > 0) {
         // We are on a new page (portrait) after the floor plans
-        listStartY = margin + 100;
+        listStartY = margin + 150; // More top spacing to clear background header
     } else {
         // We are still on the first page (or subsequent if description was long)
         // Check if we have enough space for the header
-        if (listStartY > pageHeight - 100) {
+        if (listStartY > pageHeight - 120) {
             doc.addPage();
             drawLetterhead(doc);
-            listStartY = margin + 100;
+            listStartY = margin + 150; // Match safe content zone
         }
     }
 
@@ -505,7 +505,7 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                 }
             }
         },
-        margin: { top: 90, bottom: 80, left: margin, right: margin },
+        margin: { top: 140, bottom: 120, left: margin, right: margin },
         didDrawPage: () => {
             drawLetterhead(doc);
         },
@@ -517,17 +517,17 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
     if (sortedSnags.length) {
         doc.addPage();
         drawLetterhead(doc);
-        let y = 180; // Increased to match contentStartY to avoid header overlap
+        let y = 200; // Start lower to avoid header overlay
         doc.setFontSize(16);
         doc.setTextColor(brandColors.black);
         doc.text('Snag photos', margin, y);
         y += 30;
 
         const ensureSpace = (heightNeeded: number) => {
-            if (y + heightNeeded > pageHeight - 80) {
+            if (y + heightNeeded > pageHeight - 120) {
                 doc.addPage();
                 drawLetterhead(doc);
-                y = 180; // Increased to match contentStartY
+                y = 200; // Keep consistent safe zone
             }
         };
 
