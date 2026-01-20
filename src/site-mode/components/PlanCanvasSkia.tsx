@@ -27,23 +27,33 @@ export const PlanCanvasSkia: React.FC<PlanCanvasSkiaProps> = ({
   const transformRef = useRef<{ scale: number }>({ scale: 1 });
   const [size, setSize] = useState({ width: 1, height: 1 });
   const [zoomLevel, setZoomLevel] = useState(100);
+  const imageRef = useRef<HTMLImageElement | null>(null);
 
   const draw = useCallback(
     (ctx: CanvasRenderingContext2D, img: HTMLImageElement | null) => {
       ctx.clearRect(0, 0, size.width, size.height);
+      
+      let imageX = 0;
+      let imageY = 0;
+      let imageWidth = size.width;
+      let imageHeight = size.height;
+      
       if (img) {
         const scale = Math.min(size.width / img.width, size.height / img.height);
-        const w = img.width * scale;
-        const h = img.height * scale;
-        const x = (size.width - w) / 2;
-        const y = (size.height - h) / 2;
-        ctx.drawImage(img, x, y, w, h);
+        imageWidth = img.width * scale;
+        imageHeight = img.height * scale;
+        imageX = (size.width - imageWidth) / 2;
+        imageY = (size.height - imageHeight) / 2;
+        ctx.drawImage(img, imageX, imageY, imageWidth, imageHeight);
       }
 
       ctx.fillStyle = "#FFB300";
       pins.forEach((pin) => {
         ctx.beginPath();
-        ctx.arc(pin.x * size.width, pin.y * size.height, PIN_RADIUS, 0, Math.PI * 2);
+        // Calculate pin position relative to the scaled and centered image
+        const pinX = imageX + (pin.x * imageWidth);
+        const pinY = imageY + (pin.y * imageHeight);
+        ctx.arc(pinX, pinY, PIN_RADIUS, 0, Math.PI * 2);
         ctx.fill();
       });
     },
@@ -57,8 +67,14 @@ export const PlanCanvasSkia: React.FC<PlanCanvasSkiaProps> = ({
     if (!ctx) return;
     const img = new Image();
     img.src = imageUri;
-    img.onload = () => draw(ctx, img);
-    img.onerror = () => draw(ctx, null);
+    img.onload = () => {
+      imageRef.current = img;
+      draw(ctx, img);
+    };
+    img.onerror = () => {
+      imageRef.current = null;
+      draw(ctx, null);
+    };
     return () => {
       img.onload = null;
       img.onerror = null;
@@ -70,10 +86,10 @@ export const PlanCanvasSkia: React.FC<PlanCanvasSkiaProps> = ({
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    const img = new Image();
-    img.src = imageUri;
-    img.onload = () => draw(ctx, img);
-    img.onerror = () => draw(ctx, null);
+    const img = imageRef.current;
+    if (img && img.complete) {
+      draw(ctx, img);
+    }
   }, [draw, imageUri, size.height, size.width]);
 
   useEffect(() => {
@@ -95,11 +111,29 @@ export const PlanCanvasSkia: React.FC<PlanCanvasSkiaProps> = ({
   const handleClick = useCallback(
     (event: React.MouseEvent<HTMLCanvasElement>) => {
       if (!isPlacePinMode) return;
+      
+      const img = imageRef.current;
+      if (!img) return;
+      
       const rect = event.currentTarget.getBoundingClientRect();
-      const x = event.clientX - rect.left;
-      const y = event.clientY - rect.top;
-      const nx = Math.max(0, Math.min(1, x / size.width));
-      const ny = Math.max(0, Math.min(1, y / size.height));
+      const clickX = event.clientX - rect.left;
+      const clickY = event.clientY - rect.top;
+      
+      // Calculate the scaled and centered image dimensions and position
+      const scale = Math.min(size.width / img.width, size.height / img.height);
+      const imageWidth = img.width * scale;
+      const imageHeight = img.height * scale;
+      const imageX = (size.width - imageWidth) / 2;
+      const imageY = (size.height - imageHeight) / 2;
+      
+      // Calculate position relative to the image
+      const relativeX = clickX - imageX;
+      const relativeY = clickY - imageY;
+      
+      // Normalize to 0-1 range
+      const nx = Math.max(0, Math.min(1, relativeX / imageWidth));
+      const ny = Math.max(0, Math.min(1, relativeY / imageHeight));
+      
       onPinPlaced({ x: nx, y: ny });
     },
     [isPlacePinMode, onPinPlaced, size.height, size.width]
