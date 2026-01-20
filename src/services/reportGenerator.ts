@@ -485,7 +485,7 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
         bodyStyles: { valign: 'middle' },
         alternateRowStyles: { fillColor: [248, 248, 252] },
         columnStyles: {
-            0: { cellWidth: 18, halign: 'left' },
+            0: { cellWidth: 28, halign: 'left' },
             5: { halign: 'right' },
         },
         body: [...snags]
@@ -507,7 +507,7 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                 }
             }
         },
-        margin: { top: 140, bottom: 120, left: margin, right: margin },
+        margin: { top: 140, bottom: 160, left: margin, right: margin },
         didDrawPage: () => {
             drawLetterhead(doc);
         },
@@ -586,9 +586,9 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
 
                 const hasDescription = Boolean(snag.description);
                 const descriptionLines = hasDescription
-                    ? doc.splitTextToSize(`Description: ${snag.description}`, pageWidth - margin * 2 - 10)
+                    ? doc.splitTextToSize(`Description: ${snag.description}`, pageWidth - margin * 2 - 32)
                     : [];
-                const descriptionHeight = hasDescription ? descriptionLines.length * 11 + 6 : 0;
+                const descriptionHeight = hasDescription ? descriptionLines.length * 11 + 18 : 0;
 
                 const imagesHeight = totalImages > 0 ? 18 + rows * (imgHeight + 30) : 32;
                 const blockHeight = 14 /* title */ + 20 /* meta */ + descriptionHeight + imagesHeight + 16 /* bottom pad */;
@@ -625,7 +625,7 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                     doc.setFontSize(9);
                     doc.setTextColor(brandColors.black);
                     const descriptionText = descriptionLines;
-                    doc.text(descriptionText, margin, y + 12);
+                    doc.text(descriptionText, margin + 4, y + 12);
                     y += descriptionHeight;
                 }
 
