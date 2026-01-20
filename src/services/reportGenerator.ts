@@ -585,8 +585,6 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                 }
             });
         }
-        // Switch back to portrait for the rest of the report
-        doc.addPage('a4', 'p');
     }
 
     onProgress?.('Generating snag list...');
@@ -674,9 +672,6 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
         },
     });
 
-
-        // After floor plans, move back to portrait for summaries/details
-        doc.addPage('a4', 'p');
     onProgress?.('Processing snag details with photos...');
     await yieldToMain();
 
@@ -747,11 +742,11 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
             doc.setTextColor(brandColors.grey);
             
             // Location section
-            doc.text('LOCATION', margin + 80, currentY - 2);
+            doc.text('LOCATION', margin, currentY - 2);
             doc.setFontSize(8);
             doc.setTextColor(brandColors.black);
             const locationText = formatFieldValue(location);
-            doc.text(locationText, margin + 80, currentY + 6, { maxWidth: 120 });
+            doc.text(locationText, margin, currentY + 6, { maxWidth: 120 });
             
             // Due date section (right-aligned)
             doc.setFontSize(7);
