@@ -488,14 +488,16 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
             0: { cellWidth: 18, halign: 'left' },
             5: { halign: 'right' },
         },
-        body: snags.map((snag) => [
-            snagIndexMap.get(snag.id) || '-',
-            snag.title,
-            snag.location || '—',
-            snag.status,
-            snag.priority,
-            snag.due_date || '—',
-        ]),
+        body: [...snags]
+            .sort((a, b) => (snagIndexMap.get(a.id) || 0) - (snagIndexMap.get(b.id) || 0))
+            .map((snag) => [
+                snagIndexMap.get(snag.id) || '-',
+                snag.title,
+                snag.location || '—',
+                snag.status,
+                snag.priority,
+                snag.due_date || '—',
+            ]),
         didParseCell: (data) => {
             if (data.section === 'body' && data.column.index === 3) {
                 const fill = statusColors[data.cell.raw as string];
@@ -583,10 +585,15 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                 const rows = Math.ceil(totalImages / 2);
 
                 const hasDescription = Boolean(snag.description);
-                const imagesHeight = rows * (imgHeight + 30);
-                const blockHeight = 32 + 18 + (hasDescription ? 22 : 0) + (totalImages > 0 ? imagesHeight : 22) + 14;
+                const descriptionLines = hasDescription
+                    ? doc.splitTextToSize(`Description: ${snag.description}`, pageWidth - margin * 2 - 10)
+                    : [];
+                const descriptionHeight = hasDescription ? descriptionLines.length * 11 + 6 : 0;
 
-                ensureSpace(blockHeight + 12);
+                const imagesHeight = totalImages > 0 ? 18 + rows * (imgHeight + 30) : 32;
+                const blockHeight = 14 /* title */ + 20 /* meta */ + descriptionHeight + imagesHeight + 16 /* bottom pad */;
+
+                ensureSpace(blockHeight + 16);
 
                 // Card background
                 const cardY = y - 12;
@@ -617,9 +624,9 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                 if (hasDescription) {
                     doc.setFontSize(9);
                     doc.setTextColor(brandColors.black);
-                    const descriptionText = doc.splitTextToSize(`Description: ${snag.description}`, pageWidth - margin * 2 - 10);
+                    const descriptionText = descriptionLines;
                     doc.text(descriptionText, margin, y + 12);
-                    y += descriptionText.length * 11 + 6;
+                    y += descriptionHeight;
                 }
 
                 doc.setTextColor(brandColors.black);
