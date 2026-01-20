@@ -285,6 +285,207 @@ const createLocationSnippet = async (
 
 const yieldToMain = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+// Helper function to format status and priority with color codes
+const getStatusColor = (status?: string): [number, number, number] => {
+    const colors: Record<string, [number, number, number]> = {
+        open: [239, 68, 68],        // Red
+        in_progress: [249, 115, 22], // Orange
+        completed: [34, 197, 94],    // Green
+        verified: [59, 130, 246],    // Blue
+    };
+    return colors[status || 'open'] || [107, 114, 128];
+};
+
+const getPriorityColor = (priority?: string): [number, number, number] => {
+    const colors: Record<string, [number, number, number]> = {
+        critical: [239, 68, 68],     // Red
+        high: [249, 115, 22],         // Orange
+        medium: [59, 130, 246],       // Blue
+        low: [34, 197, 94],           // Green
+    };
+    return colors[priority || 'medium'] || [107, 114, 128];
+};
+
+const formatFieldValue = (value: string | null | undefined): string => {
+    if (!value || value.trim() === '' || value === '—') {
+        return 'Not Specified';
+    }
+    return value;
+};
+
+// Create a slimmed header for internal pages
+const drawSlimHeader = (targetDoc: jsPDF, projectName: string, pageNum: number, totalPages: number) => {
+    const pageWidth = targetDoc.internal.pageSize.getWidth();
+    const margin = 40;
+    
+    // Draw a thin line separator
+    targetDoc.setDrawColor(226, 232, 240);
+    targetDoc.setLineWidth(0.5);
+    targetDoc.line(margin, 25, pageWidth - margin, 25);
+    
+    // Left: Project name
+    targetDoc.setFontSize(9);
+    targetDoc.setTextColor(107, 114, 128);
+    targetDoc.text(projectName, margin, 15);
+    
+    // Right: Page number
+    targetDoc.text(`Page ${pageNum} of ${totalPages}`, pageWidth - margin, 15, { align: 'right' });
+};
+
+const drawCoverPage = async (doc: jsPDF, project: Project, snags: Snag[]): Promise<number> => {
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 40;
+    
+    // Full page letterhead for cover
+    const letterheadData = await toDataUrl(brandAssets.letterhead);
+    if (letterheadData) {
+        doc.addImage(letterheadData, 'PNG', 0, 0, pageWidth, pageHeight);
+    }
+    
+    // Cover page content - centered
+    let y = pageHeight * 0.35;
+    
+    doc.setFontSize(28);
+    doc.setTextColor(brandColors.black);
+    doc.text('SNAGGING REPORT', pageWidth / 2, y, { align: 'center' });
+    
+    y += 40;
+    doc.setFontSize(14);
+    doc.setTextColor(brandColors.grey);
+    doc.text(project.name, pageWidth / 2, y, { align: 'center' });
+    
+    y += 35;
+    doc.setFontSize(11);
+    doc.text(`Client: ${project.client_name || 'Not Specified'}`, pageWidth / 2, y, { align: 'center' });
+    
+    y += 25;
+    doc.setFontSize(10);
+    doc.setTextColor(150, 155, 160);
+    doc.text(`Report Generated: ${new Date().toLocaleDateString()}`, pageWidth / 2, y, { align: 'center' });
+    
+    // Footer with company details
+    const footerY = pageHeight - 80;
+    doc.setFontSize(8);
+    doc.setTextColor(107, 114, 128);
+    const contactLines = [
+        'BPAS Architects & Engineers',
+        'Office F14, First Floor, Willowbridge Shopping Centre',
+        '39 Carl Cronje Drive, Tygervalley, 7530',
+        'Tel: +27 (0) 21 914 5960 | Email: info@bpas.co.za | www.bpas.co.za',
+    ];
+    contactLines.forEach((line, idx) => {
+        doc.text(line, pageWidth / 2, footerY + idx * 10, { align: 'center' });
+    });
+    
+    return 1;
+};
+
+const drawExecutiveSummary = async (doc: jsPDF, project: Project, snags: Snag[]): Promise<void> => {
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 40;
+    
+    doc.addPage();
+    
+    // Slim header
+    const totalPages = doc.getNumberOfPages();
+    drawSlimHeader(doc, project.name, 2, totalPages);
+    
+    let y = 50;
+    
+    doc.setFontSize(16);
+    doc.setTextColor(brandColors.black);
+    doc.text('Executive Summary', margin, y);
+    
+    y += 30;
+    
+    // Count snags by status
+    const statusCounts: Record<string, number> = {};
+    const priorityCounts: Record<string, number> = {};
+    
+    snags.forEach(snag => {
+        const status = snag.status || 'open';
+        const priority = snag.priority || 'medium';
+        statusCounts[status] = (statusCounts[status] || 0) + 1;
+        priorityCounts[priority] = (priorityCounts[priority] || 0) + 1;
+    });
+    
+    // Status breakdown
+    doc.setFontSize(12);
+    doc.setTextColor(brandColors.black);
+    doc.text('Status Breakdown:', margin, y);
+    y += 18;
+    
+    doc.setFontSize(10);
+    Object.entries(statusCounts).forEach(([status, count]) => {
+        const color = getStatusColor(status);
+        doc.setFillColor(...color);
+        doc.rect(margin, y - 5, 8, 8, 'F');
+        doc.setTextColor(brandColors.black);
+        doc.text(`${status.charAt(0).toUpperCase() + status.slice(1)}: ${count} snag${count !== 1 ? 's' : ''}`, margin + 14, y);
+        y += 12;
+    });
+    
+    y += 10;
+    
+    // Priority breakdown
+    doc.setFontSize(12);
+    doc.setTextColor(brandColors.black);
+    doc.text('Priority Breakdown:', margin, y);
+    y += 18;
+    
+    doc.setFontSize(10);
+    Object.entries(priorityCounts).forEach(([priority, count]) => {
+        const color = getPriorityColor(priority);
+        doc.setFillColor(...color);
+        doc.rect(margin, y - 5, 8, 8, 'F');
+        doc.setTextColor(brandColors.black);
+        doc.text(`${priority.charAt(0).toUpperCase() + priority.slice(1)}: ${count} snag${count !== 1 ? 's' : ''}`, margin + 14, y);
+        y += 12;
+    });
+    
+    y += 15;
+    
+    // Project details
+    doc.setFontSize(11);
+    doc.setTextColor(brandColors.black);
+    doc.text('Project Details:', margin, y);
+    y += 16;
+    
+    doc.setFontSize(10);
+    doc.setTextColor(brandColors.grey);
+    
+    const details = [
+        ['Project:', project.name],
+        ['Client:', project.client_name || 'Not Specified'],
+        ...(project.project_number ? [['Project Number:', project.project_number]] : []),
+        ...(project.address ? [['Address:', project.address]] : []),
+        ...(project.inspection_type ? [['Inspection Type:', project.inspection_type]] : []),
+        ...(project.inspection_scope ? [['Scope:', project.inspection_scope]] : []),
+    ];
+    
+    details.forEach(([label, value]) => {
+        doc.setTextColor(107, 114, 128);
+        doc.text(label, margin, y);
+        doc.setTextColor(brandColors.black);
+        doc.text(value, margin + 80, y);
+        y += 12;
+    });
+    
+    if (project.inspection_description) {
+        y += 10;
+        doc.setFontSize(10);
+        doc.setTextColor(107, 114, 128);
+        doc.text('Inspection Notes:', margin, y);
+        y += 12;
+        
+        doc.setTextColor(brandColors.grey);
+        const descLines = doc.splitTextToSize(project.inspection_description, pageWidth - margin * 2 - 20);
+        doc.text(descLines, margin + 10, y);
+    }
+};
+
 export const generateReport = async ({ project, snags, onProgress }: ReportGenerationOptions) => {
     onProgress?.('Initializing report...');
     await yieldToMain();
@@ -295,67 +496,13 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
     const pageHeight = doc.internal.pageSize.getHeight();
     const margin = 40;
 
-    // Branding assets
-    const letterheadData = await toDataUrl(brandAssets.letterhead);
-
-    const drawLetterhead = (targetDoc: jsPDF) => {
-        if (letterheadData) {
-            targetDoc.addImage(letterheadData, 'PNG', 0, 0, pageWidth, pageHeight);
-        }
-    };
-
-    const drawFooter = () => {
-        const totalPages = doc.getNumberOfPages();
-        for (let i = 1; i <= totalPages; i++) {
-            doc.setPage(i);
-            const size = doc.internal.pageSize;
-            const w = size.getWidth();
-            const h = size.getHeight();
-            const footerY = h - 22;
-            doc.setFontSize(8);
-            doc.setTextColor(110, 110, 110);
-            // Branding text removed (already on background). Keep page number only.
-            doc.text(`Page ${i} of ${totalPages}`, w - margin, footerY, { align: 'right' });
-        }
-    };
-
-    drawLetterhead(doc);
-
-    const contentStartY = 190; // Raise start to avoid background header overlap
-    doc.setFontSize(18);
-    doc.setTextColor(brandColors.black);
-    doc.text('BPAS Snagging Report', margin, contentStartY);
-
-    doc.setFontSize(11);
-    doc.setTextColor(brandColors.grey);
-    doc.text(`Project: ${project.name}`, margin, contentStartY + 18);
-    doc.text(`Client: ${project.client_name || 'N/A'}`, margin, contentStartY + 32);
-
-    let currentY = contentStartY + 46;
-    if (project.project_number) {
-        doc.text(`Project Number: ${project.project_number}`, margin, currentY);
-        currentY += 14;
-    }
-    if (project.inspection_type) {
-        doc.text(`Inspection Type: ${project.inspection_type}`, margin, currentY);
-        currentY += 14;
-    }
-    if (project.inspection_scope) {
-        doc.text(`Scope: ${project.inspection_scope}`, margin, currentY);
-        currentY += 14;
-    }
-
-    doc.text(`Generated: ${new Date().toLocaleString()}`, margin, currentY);
-    currentY += 14;
-    doc.text(`Date of Inspection: ${new Date().toLocaleDateString()}`, margin, currentY);
-    currentY += 20;
-
-    if (project.inspection_description) {
-        doc.setFontSize(10);
-        const splitDescription = doc.splitTextToSize(`Description: ${project.inspection_description}`, pageWidth - margin * 2);
-        doc.text(splitDescription, margin, currentY);
-        currentY += splitDescription.length * 12 + 10;
-    }
+    // Draw cover page
+    onProgress?.('Creating cover page...');
+    await drawCoverPage(doc, project, snags);
+    
+    // Draw executive summary
+    onProgress?.('Creating executive summary...');
+    await drawExecutiveSummary(doc, project, snags);
 
     onProgress?.('Processing floor plans...');
     await yieldToMain();
@@ -372,13 +519,9 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
     });
 
     // Map snags to sequential numbers (1, 2, 3...) based on their order in the report
-    // Use sortedSnags so the numbering matches the order they appear in the report
     const snagIndexMap = new Map<string, number>();
     sortedSnags.forEach((s, i) => snagIndexMap.set(s.id, i + 1));
 
-    // Pass sortedSnags (or original snags) to filter plans. 
-    // We use sortedSnags because that's what we are reporting on? 
-    // Actually, we should use the full list of snags being reported.
     const floorPlans = await getFloorPlans(project, sortedSnags, onProgress);
     if (floorPlans.length) {
         for (let idx = 0; idx < floorPlans.length; idx++) {
@@ -407,9 +550,15 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
             const xOffset = (landscapeWidth - finalW) / 2;
             const yOffset = margin + 30;
 
-            doc.setFontSize(12);
+            // Slim header for floor plan
+            doc.setFontSize(10);
             doc.setTextColor(brandColors.black);
-            doc.text(`${plan.name} • Page ${plan.page} • ${project.name}`, margin, margin + 12);
+            doc.text(`${plan.name} • Page ${plan.page}`, margin, margin + 12);
+            
+            const totalPages = doc.getNumberOfPages();
+            doc.setFontSize(9);
+            doc.setTextColor(brandColors.grey);
+            doc.text(`Page ${totalPages}`, landscapeWidth - margin, margin + 12, { align: 'right' });
 
             doc.addImage(scaledPlan, 'JPEG', xOffset, yOffset, finalW, finalH);
 
@@ -425,7 +574,8 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                     const y = yOffset + finalH * snag.plan_y;
 
                     // Draw marker with white outline for contrast
-                    doc.setFillColor(235, 64, 52);
+                    const priorityColor = getPriorityColor(snag.priority);
+                    doc.setFillColor(...priorityColor);
                     doc.circle(x, y, 7, 'F');
                     doc.setDrawColor(255, 255, 255);
                     doc.setLineWidth(1.2);
@@ -441,100 +591,116 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                 }
             });
         }
-        // Switch back to portrait for the rest of the report if needed, or keep adding portrait pages
+        // Switch back to portrait for the rest of the report
         doc.addPage('a4', 'p');
-        drawLetterhead(doc);
     }
 
     onProgress?.('Generating snag list...');
     await yieldToMain();
 
-    const statusColors: Record<string, [number, number, number]> = {
-        open: [235, 160, 0],
-        in_progress: [90, 96, 97],
-        completed: [16, 185, 129],
-        verified: [37, 99, 235],
-    };
-
-    // Determine start Y for the list
-    let listStartY = currentY + 40;
-
-    // If we added floor plans (which add pages), we need to reset for a new page
-    if (floorPlans.length > 0) {
-        // We are on a new page (portrait) after the floor plans
-        listStartY = margin + 150; // More top spacing to clear background header
-    } else {
-        // We are still on the first page (or subsequent if description was long)
-        // Check if we have enough space for the header
-        if (listStartY > pageHeight - 120) {
-            doc.addPage();
-            drawLetterhead(doc);
-            listStartY = margin + 150; // Match safe content zone
-        }
-    }
+    // Snag list starts on its own page
+    const listPageNum = doc.getNumberOfPages();
+    drawSlimHeader(doc, project.name, listPageNum, doc.getNumberOfPages());
+    
+    let listStartY = margin + 50;
 
     doc.setFontSize(16);
     doc.setTextColor(brandColors.black);
-    doc.text('Snag List', margin, listStartY - 20);
+    doc.text('Snag List Summary', margin, listStartY);
+    listStartY += 25;
 
+    // Clean snag list table with proper styling
     autoTable(doc, {
         startY: listStartY,
-        head: [['#', 'Title', 'Location', 'Status', 'Priority', 'Due']],
-        styles: { fontSize: 9, font: 'helvetica', textColor: [45, 55, 72] },
-        headStyles: { fillColor: [235, 160, 0], textColor: [255, 255, 255], halign: 'left', valign: 'middle' },
-        bodyStyles: { valign: 'middle' },
-        alternateRowStyles: { fillColor: [248, 248, 252] },
+        head: [['#', 'Title', 'Location', 'Status', 'Priority', 'Due Date']],
+        styles: {
+            fontSize: 9,
+            font: 'helvetica',
+            textColor: [45, 55, 72],
+            cellPadding: [8, 6],
+            overflow: 'linebreak',
+            valign: 'middle',
+        },
+        headStyles: {
+            fillColor: brandColors.yellow,
+            textColor: [255, 255, 255],
+            halign: 'left',
+            valign: 'middle',
+            fontStyle: 'bold',
+            fontSize: 10,
+        },
+        bodyStyles: {
+            valign: 'middle',
+        },
+        alternateRowStyles: {
+            fillColor: [248, 248, 252],
+        },
         columnStyles: {
-            0: { cellWidth: 28, halign: 'left' },
-            5: { halign: 'right' },
+            0: { cellWidth: 30, halign: 'center' },
+            1: { cellWidth: 100 },
+            2: { cellWidth: 90 },
+            3: { halign: 'center', cellWidth: 50 },
+            4: { halign: 'center', cellWidth: 50 },
+            5: { halign: 'right', cellWidth: 60 },
         },
         body: [...snags]
             .sort((a, b) => (snagIndexMap.get(a.id) || 0) - (snagIndexMap.get(b.id) || 0))
             .map((snag) => [
-                snagIndexMap.get(snag.id) || '-',
+                String(snagIndexMap.get(snag.id) || '-'),
                 snag.title,
-                snag.location || '—',
-                snag.status,
-                snag.priority,
-                snag.due_date || '—',
+                formatFieldValue(snag.location),
+                snag.status || 'open',
+                snag.priority || 'medium',
+                snag.due_date || 'Not Set',
             ]),
         didParseCell: (data) => {
+            // Color-code status column
             if (data.section === 'body' && data.column.index === 3) {
-                const fill = statusColors[data.cell.raw as string];
-                if (fill) {
-                    data.cell.styles.fillColor = fill;
-                    data.cell.styles.textColor = [255, 255, 255];
-                }
+                const status = data.cell.raw as string;
+                const color = getStatusColor(status);
+                data.cell.styles.fillColor = color;
+                data.cell.styles.textColor = [255, 255, 255];
+            }
+            // Color-code priority column
+            if (data.section === 'body' && data.column.index === 4) {
+                const priority = data.cell.raw as string;
+                const color = getPriorityColor(priority);
+                data.cell.styles.fillColor = color;
+                data.cell.styles.textColor = [255, 255, 255];
             }
         },
-        margin: { top: 140, bottom: 160, left: margin, right: margin },
-        didDrawPage: () => {
-            drawLetterhead(doc);
+        margin: { top: 10, bottom: 40, left: margin, right: margin },
+        didDrawPage: (data) => {
+            // Draw slim header on each page
+            const pageNum = doc.getNumberOfPages();
+            drawSlimHeader(doc, project.name, pageNum, doc.getNumberOfPages());
         },
     });
 
-    onProgress?.('Processing photos...');
+    onProgress?.('Processing snag details with photos...');
     await yieldToMain();
 
+    // Process snag detail cards with photos
     if (sortedSnags.length) {
         doc.addPage();
-        drawLetterhead(doc);
-        const safeTop = margin + 160;
-        let y = safeTop; // Start lower to avoid header overlay
+        const safeTop = margin + 40;
+        let y = safeTop;
+        
         doc.setFontSize(16);
         doc.setTextColor(brandColors.black);
-        doc.text('Snag photos', margin, y);
-        y += 30;
+        doc.text('Snag Details', margin, y);
+        y += 25;
 
         const ensureSpace = (heightNeeded: number) => {
-            if (y + heightNeeded > pageHeight - 140) {
+            const pageNum = doc.getNumberOfPages();
+            if (y + heightNeeded > pageHeight - 60) {
                 doc.addPage();
-                drawLetterhead(doc);
-                y = safeTop; // Keep consistent safe zone
+                drawSlimHeader(doc, project.name, doc.getNumberOfPages(), doc.getNumberOfPages());
+                y = safeTop;
             }
         };
 
-        const BATCH_SIZE = 5;
+        const BATCH_SIZE = 3; // Process 3 snags at a time
         for (let i = 0; i < sortedSnags.length; i += BATCH_SIZE) {
             const batch = sortedSnags.slice(i, i + BATCH_SIZE);
 
@@ -545,7 +711,7 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                 const photos: string[] = [];
 
                 if (photoRows && photoRows.length > 0) {
-                    const photoPromises = photoRows.map(async (row) => {
+                    const photoPromises = photoRows.slice(0, 2).map(async (row) => { // Limit to 2 photos per snag
                         const imgData = await toDataUrl(row.photo_url);
                         if (imgData) {
                             return await downscaleImage(imgData, 1200, 0.7);
@@ -575,88 +741,122 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
             for (const { snag, photos, locationSnippet } of batchResults) {
                 const globalIndex = snagIndexMap.get(snag.id) || 0;
 
-                const imgWidth = (pageWidth - margin * 2 - 16) / 2;
-                const imgHeight = imgWidth * 0.6;
+                // Calculate card height for dynamic sizing
+                const hasDescription = Boolean(snag.description);
+                const descriptionLines = hasDescription
+                    ? doc.splitTextToSize(snag.description!, pageWidth - margin * 2 - 20)
+                    : [];
+                const descriptionHeight = hasDescription ? descriptionLines.length * 10 + 10 : 0;
 
                 const hasPhotos = photos.length > 0;
                 const hasSnippet = !!locationSnippet;
-
                 const totalImages = (hasSnippet ? 1 : 0) + photos.length;
-                const rows = Math.ceil(totalImages / 2);
+                
+                const imageHeight = totalImages > 0 ? 120 : 0;
 
-                const hasDescription = Boolean(snag.description);
-                const descriptionLines = hasDescription
-                    ? doc.splitTextToSize(`Description: ${snag.description}`, pageWidth - margin * 2 - 48)
-                    : [];
-                const descriptionHeight = hasDescription ? descriptionLines.length * 11 + 18 : 0;
+                // Dynamic card height based on content
+                const cardHeight = 50 + descriptionHeight + imageHeight + 20; // title + desc + images + padding
 
-                const imagesHeight = totalImages > 0 ? 18 + rows * (imgHeight + 30) : 32;
-                const blockHeight = 14 /* title */ + 20 /* meta */ + descriptionHeight + imagesHeight + 16 /* bottom pad */;
+                ensureSpace(cardHeight + 10);
 
-                ensureSpace(blockHeight + 16);
+                // Card background with rounded corners
+                const cardX = margin - 10;
+                const cardW = pageWidth - margin * 2 + 20;
+                const cardY = y - 8;
+                doc.setFillColor(248, 250, 252);
+                doc.roundedRect(cardX, cardY, cardW, cardHeight + 16, 4, 4, 'F');
+                
+                // Card border
+                doc.setDrawColor(226, 232, 240);
+                doc.setLineWidth(0.5);
+                doc.roundedRect(cardX, cardY, cardW, cardHeight + 16, 4, 4, 'S');
 
-                // Card background
-                const cardY = y - 12;
-                const cardH = blockHeight + 12;
-                doc.setFillColor(249, 250, 252);
-                doc.roundedRect(margin - 8, cardY, pageWidth - margin * 2 + 16, cardH, 6, 6, 'F');
-                doc.setDrawColor(236, 239, 241);
-                doc.roundedRect(margin - 8, cardY, pageWidth - margin * 2 + 16, cardH, 6, 6, 'S');
-
+                // Snag number and title
                 doc.setFontSize(12);
                 doc.setTextColor(brandColors.black);
                 const titleLines = doc.splitTextToSize(`${globalIndex}. ${snag.title}`, pageWidth - margin * 2 - 20);
-                doc.text(titleLines, margin, y);
-                y += titleLines.length * 14;
-                doc.setFontSize(10);
-                doc.setTextColor(brandColors.grey);
-                doc.text(
-                    [
-                        `Location: ${snag.location || '—'}`,
-                        `Status: ${snag.status || 'open'}`,
-                        `Priority: ${snag.priority || 'medium'}`,
-                        `Due: ${snag.due_date || '—'}`,
-                    ],
-                    margin,
-                    y,
-                );
-                y += 20;
+                doc.text(titleLines, margin, y + 8);
+                y += titleLines.length * 12 + 10;
 
+                // Metadata in a cleaner 2-column layout
+                doc.setFontSize(9);
+                const priorityColor = getPriorityColor(snag.priority);
+                const statusColor = getStatusColor(snag.status);
+                
+                // Status badge
+                doc.setFillColor(...statusColor);
+                doc.roundedRect(margin, y - 3, 35, 8, 2, 2, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(8);
+                doc.text((snag.status || 'open').toUpperCase(), margin + 17.5, y + 1, { align: 'center' });
+                
+                // Priority badge
+                doc.setFillColor(...priorityColor);
+                doc.roundedRect(margin + 40, y - 3, 35, 8, 2, 2, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.text((snag.priority || 'medium').toUpperCase(), margin + 57.5, y + 1, { align: 'center' });
+                
+                // Location
+                doc.setTextColor(brandColors.grey);
+                doc.setFontSize(8);
+                doc.text('Location:', margin + 80, y, { maxWidth: 60 });
+                doc.setTextColor(brandColors.black);
+                doc.text(formatFieldValue(snag.location), margin + 140, y, { maxWidth: 100 });
+                
+                // Due date (right aligned)
+                doc.setTextColor(brandColors.grey);
+                doc.text('Due:', pageWidth - margin - 70, y);
+                doc.setTextColor(brandColors.black);
+                doc.text(snag.due_date || 'Not Set', pageWidth - margin - 30, y, { align: 'right' });
+                
+                y += 12;
+
+                // Description with clear demarcation
                 if (hasDescription) {
                     doc.setFontSize(9);
+                    doc.setTextColor(107, 114, 128);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text('Description:', margin + 10, y);
+                    
+                    y += 10;
+                    doc.setFont('helvetica', 'normal');
                     doc.setTextColor(brandColors.black);
-                    const descriptionText = descriptionLines;
-                    doc.text(descriptionText, margin + 4, y + 12);
-                    y += descriptionHeight;
+                    doc.text(descriptionLines, margin + 10, y);
+                    y += descriptionLines.length * 10 + 5;
                 }
 
-                doc.setTextColor(brandColors.black);
-
+                // Images side-by-side
                 if (totalImages > 0) {
+                    y += 5;
+                    const imgWidth = (pageWidth - margin * 2 - 40) / 2; // Two columns
+                    const imgHeight = 100;
+
                     const imageItems: Array<{ src: string; label: string }> = [];
-                    if (locationSnippet) imageItems.push({ src: locationSnippet, label: 'Location on plan' });
+                    if (locationSnippet) imageItems.push({ src: locationSnippet, label: 'Location on Plan' });
                     photos.forEach((photo, idx) => imageItems.push({ src: photo, label: `Photo ${idx + 1}` }));
 
-                    imageItems.forEach((img, idx) => {
-                        const col = idx % 2;
-                        const row = Math.floor(idx / 2);
-                        const x = margin + col * (imgWidth + 18);
-                        const yPos = y + 18 + row * (imgHeight + 30);
-                        doc.setFontSize(8);
-                        doc.setTextColor(brandColors.grey);
-                        doc.text(img.label, x, yPos - 8);
-                        doc.addImage(img.src, 'JPEG', x, yPos, imgWidth, imgHeight);
-                    });
+                    for (let imgIdx = 0; imgIdx < imageItems.length; imgIdx++) {
+                        const col = imgIdx % 2;
+                        const row = Math.floor(imgIdx / 2);
+                        const imgX = margin + 10 + col * (imgWidth + 15);
+                        const imgY = y + row * (imgHeight + 25);
 
-                    y += 18 + rows * (imgHeight + 30);
-                } else {
-                    doc.setFontSize(9);
-                    doc.setTextColor(brandColors.grey);
-                    doc.text('No photos attached.', margin, y + 14);
-                    y += 32;
+                        // Image label
+                        doc.setFontSize(8);
+                        doc.setTextColor(107, 114, 128);
+                        doc.text(imageItems[imgIdx].label, imgX, imgY - 5);
+
+                        // Image with border
+                        doc.setDrawColor(200, 210, 220);
+                        doc.setLineWidth(0.5);
+                        doc.rect(imgX, imgY, imgWidth, imgHeight);
+                        doc.addImage(imageItems[imgIdx].src, 'JPEG', imgX, imgY, imgWidth, imgHeight);
+                    }
+                    
+                    y += Math.ceil(imageItems.length / 2) * (imgHeight + 25);
                 }
 
-                y += 16;
+                y += 15; // Spacing between cards
             }
             await yieldToMain();
         }
@@ -665,7 +865,29 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
     onProgress?.('Finalizing PDF...');
     await yieldToMain();
 
-    drawFooter();
+    // Final page with company details
+    doc.addPage();
+    const finalPageNum = doc.getNumberOfPages();
+    drawSlimHeader(doc, project.name, finalPageNum, doc.getNumberOfPages());
+    
+    let finalY = pageHeight - 150;
+    doc.setFontSize(9);
+    doc.setTextColor(107, 114, 128);
+    doc.text('Report prepared by:', margin, finalY);
+    doc.text('BPAS Architects & Engineers', margin, finalY + 14);
+    
+    doc.setFontSize(8);
+    const contactDetails = [
+        'Office F14, First Floor, Willowbridge Shopping Centre',
+        '39 Carl Cronje Drive, Tygervalley, 7530',
+        'Tel: +27 (0) 21 914 5960',
+        'Email: info@bpas.co.za',
+        'Web: www.bpas.co.za',
+    ];
+    
+    contactDetails.forEach((line, idx) => {
+        doc.text(line, margin, finalY + 28 + idx * 8);
+    });
 
     const pdf = doc.output('blob');
     const fileName = formatFileName(project);
@@ -677,7 +899,7 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
     onProgress?.('Initializing Word report...');
     await yieldToMain();
 
-    const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, ImageRun, Header, Footer, AlignmentType, PageBreak } = await import('docx');
+    const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, ImageRun, Header, Footer, AlignmentType, PageBreak, BorderStyle } = await import('docx');
 
     const sortedSnags = [...snags].sort((a, b) => {
         if (a.plan_id !== b.plan_id) return (a.plan_id || '').localeCompare(b.plan_id || '');
@@ -687,100 +909,171 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
         return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
     });
 
-    // Map snags to sequential numbers (1, 2, 3...) based on their order in the report
     const snagIndexMap = new Map<string, number>();
     sortedSnags.forEach((s, i) => snagIndexMap.set(s.id, i + 1));
 
     const children: any[] = [];
 
-    // Title and header information with better styling
+    // === COVER PAGE ===
     children.push(
         new Paragraph({
-            text: "BPAS Snagging Report",
+            text: "SNAGGING REPORT",
             heading: "Title",
             alignment: AlignmentType.CENTER,
+            spacing: { after: 400 },
+        }),
+        new Paragraph({
+            text: project.name,
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 200 },
+            style: "Heading1",
+        }),
+        new Paragraph({
+            children: [
+                new TextRun({
+                    text: `Client: ${project.client_name || 'Not Specified'}`,
+                    size: 22,
+                }),
+            ],
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 400 },
+        }),
+        new Paragraph({
+            children: [
+                new TextRun({
+                    text: `Report Generated: ${new Date().toLocaleDateString()}`,
+                    size: 20,
+                    color: "808080",
+                }),
+            ],
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 800 },
+        }),
+        new PageBreak(),
+    );
+
+    // === EXECUTIVE SUMMARY ===
+    children.push(
+        new Paragraph({
+            text: "Executive Summary",
+            heading: "Heading1",
+            spacing: { after: 200 },
+        })
+    );
+
+    const statusCounts: Record<string, number> = {};
+    const priorityCounts: Record<string, number> = {};
+    snags.forEach(snag => {
+        const status = snag.status || 'open';
+        const priority = snag.priority || 'medium';
+        statusCounts[status] = (statusCounts[status] || 0) + 1;
+        priorityCounts[priority] = (priorityCounts[priority] || 0) + 1;
+    });
+
+    children.push(
+        new Paragraph({
+            text: "Status Breakdown:",
+            heading: "Heading3",
+            spacing: { after: 100 },
+        })
+    );
+
+    Object.entries(statusCounts).forEach(([status, count]) => {
+        children.push(
+            new Paragraph({
+                children: [
+                    new TextRun({
+                        text: `${status.charAt(0).toUpperCase() + status.slice(1)}: ${count} snag${count !== 1 ? 's' : ''}`,
+                    }),
+                ],
+                spacing: { after: 50 },
+            })
+        );
+    });
+
+    children.push(new Paragraph({ text: "", spacing: { after: 100 } }));
+
+    children.push(
+        new Paragraph({
+            text: "Priority Breakdown:",
+            heading: "Heading3",
+            spacing: { after: 100 },
+        })
+    );
+
+    Object.entries(priorityCounts).forEach(([priority, count]) => {
+        children.push(
+            new Paragraph({
+                children: [
+                    new TextRun({
+                        text: `${priority.charAt(0).toUpperCase() + priority.slice(1)}: ${count} snag${count !== 1 ? 's' : ''}`,
+                    }),
+                ],
+                spacing: { after: 50 },
+            })
+        );
+    });
+
+    children.push(
+        new Paragraph({
+            text: "",
             spacing: { after: 200 },
         }),
         new Paragraph({
-            children: [
-                new TextRun({
-                    text: "Project: ",
-                    bold: true,
-                }),
-                new TextRun(project.name),
-            ],
+            text: "Project Details:",
+            heading: "Heading3",
             spacing: { after: 100 },
         }),
         new Paragraph({
             children: [
-                new TextRun({
-                    text: "Client: ",
-                    bold: true,
-                }),
-                new TextRun(project.client_name || 'N/A'),
+                new TextRun({ text: "Project: ", bold: true }),
+                new TextRun(project.name),
             ],
-            spacing: { after: 100 },
+            spacing: { after: 50 },
+        }),
+        new Paragraph({
+            children: [
+                new TextRun({ text: "Client: ", bold: true }),
+                new TextRun(project.client_name || 'Not Specified'),
+            ],
+            spacing: { after: 50 },
         }),
         ...(project.project_number ? [new Paragraph({
             children: [
-                new TextRun({
-                    text: "Project Number: ",
-                    bold: true,
-                }),
+                new TextRun({ text: "Project Number: ", bold: true }),
                 new TextRun(project.project_number),
             ],
-            spacing: { after: 100 },
+            spacing: { after: 50 },
+        })] : []),
+        ...(project.address ? [new Paragraph({
+            children: [
+                new TextRun({ text: "Address: ", bold: true }),
+                new TextRun(project.address),
+            ],
+            spacing: { after: 50 },
         })] : []),
         ...(project.inspection_type ? [new Paragraph({
             children: [
-                new TextRun({
-                    text: "Inspection Type: ",
-                    bold: true,
-                }),
+                new TextRun({ text: "Inspection Type: ", bold: true }),
                 new TextRun(project.inspection_type),
             ],
-            spacing: { after: 100 },
+            spacing: { after: 50 },
         })] : []),
         ...(project.inspection_scope ? [new Paragraph({
             children: [
-                new TextRun({
-                    text: "Scope: ",
-                    bold: true,
-                }),
+                new TextRun({ text: "Scope: ", bold: true }),
                 new TextRun(project.inspection_scope),
             ],
-            spacing: { after: 100 },
+            spacing: { after: 50 },
         })] : []),
         ...(project.inspection_description ? [new Paragraph({
             children: [
-                new TextRun({
-                    text: "Description: ",
-                    bold: true,
-                }),
+                new TextRun({ text: "Inspection Notes: ", bold: true }),
                 new TextRun(project.inspection_description),
             ],
             spacing: { after: 100 },
         })] : []),
-        new Paragraph({
-            children: [
-                new TextRun({
-                    text: "Generated: ",
-                    bold: true,
-                }),
-                new TextRun(new Date().toLocaleString()),
-            ],
-            spacing: { after: 100 },
-        }),
-        new Paragraph({
-            children: [
-                new TextRun({
-                    text: "Date of Inspection: ",
-                    bold: true,
-                }),
-                new TextRun(new Date().toLocaleDateString()),
-            ],
-            spacing: { after: 400 },
-        })
+        new PageBreak()
     );
 
     onProgress?.('Processing floor plans...');
@@ -788,7 +1081,13 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
     const floorPlans = await getFloorPlans(project, sortedSnags, onProgress);
 
     if (floorPlans.length > 0) {
-        children.push(new Paragraph({ text: "Floor Plans", heading: "Heading1", pageBreakBefore: true }));
+        children.push(
+            new Paragraph({
+                text: "Floor Plans",
+                heading: "Heading1",
+                spacing: { after: 200 },
+            })
+        );
 
         for (const plan of floorPlans) {
             const img = new Image();
@@ -811,10 +1110,11 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
                     if (snag.plan_x != null && snag.plan_y != null) {
                         const x = img.width * snag.plan_x;
                         const y = img.height * snag.plan_y;
+                        const priorityColor = getPriorityColor(snag.priority);
 
                         ctx.beginPath();
                         ctx.arc(x, y, Math.max(img.width * 0.01, 10), 0, 2 * Math.PI);
-                        ctx.fillStyle = 'rgba(235, 64, 52, 0.8)';
+                        ctx.fillStyle = `rgba(${priorityColor[0]}, ${priorityColor[1]}, ${priorityColor[2]}, 0.8)`;
                         ctx.fill();
                         ctx.strokeStyle = 'white';
                         ctx.lineWidth = 2;
@@ -853,15 +1153,22 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
                 }
             }
         }
+        children.push(new PageBreak());
     }
 
     onProgress?.('Generating snag list...');
     await yieldToMain();
-    children.push(new Paragraph({ text: "Snag List", heading: "Heading1", pageBreakBefore: true }));
+    children.push(
+        new Paragraph({
+            text: "Snag List Summary",
+            heading: "Heading1",
+            spacing: { after: 200 },
+        })
+    );
 
     const tableRows = [
         new TableRow({
-            children: ['#', 'Title', 'Location', 'Status', 'Priority', 'Due'].map(text =>
+            children: ['#', 'Title', 'Location', 'Status', 'Priority', 'Due Date'].map(text =>
                 new TableCell({
                     children: [new Paragraph({ text, style: "Strong" })],
                     shading: { fill: "EBA000" },
@@ -869,28 +1176,39 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
             ),
             tableHeader: true,
         }),
-        ...snags.map(snag =>
+        ...snags
+            .sort((a, b) => (snagIndexMap.get(a.id) || 0) - (snagIndexMap.get(b.id) || 0))
+            .map(snag =>
             new TableRow({
                 children: [
                     String(snagIndexMap.get(snag.id) || '-'),
                     snag.title,
-                    snag.location || '—',
-                    snag.status,
-                    snag.priority,
-                    snag.due_date || '—'
+                    formatFieldValue(snag.location),
+                    snag.status || 'open',
+                    snag.priority || 'medium',
+                    snag.due_date || 'Not Set'
                 ].map(text => new TableCell({ children: [new Paragraph(text)] }))
             })
         )
     ];
 
-    children.push(new Table({
-        rows: tableRows,
-        width: { size: 100, type: WidthType.PERCENTAGE },
-    }));
+    children.push(
+        new Table({
+            rows: tableRows,
+            width: { size: 100, type: WidthType.PERCENTAGE },
+        }),
+        new PageBreak()
+    );
 
-    onProgress?.('Processing photos...');
+    onProgress?.('Processing snag details with photos...');
     await yieldToMain();
-    children.push(new Paragraph({ text: "Snag Photos", heading: "Heading1", pageBreakBefore: true }));
+    children.push(
+        new Paragraph({
+            text: "Snag Details",
+            heading: "Heading1",
+            spacing: { after: 200 },
+        })
+    );
 
     const BATCH_SIZE = 5;
     for (let i = 0; i < sortedSnags.length; i += BATCH_SIZE) {
@@ -902,7 +1220,7 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
             const photos: ArrayBuffer[] = [];
 
             if (photoRows && photoRows.length > 0) {
-                const photoPromises = photoRows.map(async (row) => {
+                const photoPromises = photoRows.slice(0, 2).map(async (row) => {
                     const url = new URL(row.photo_url);
                     url.searchParams.append('report', 'true');
                     url.searchParams.append('t', Date.now().toString());
@@ -925,11 +1243,6 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
                     const globalIndex = snagIndexMap.get(snag.id) || 0;
                     const snippetDataUrl = await createLocationSnippet(plan.image, snag.plan_x, snag.plan_y, globalIndex);
                     if (snippetDataUrl) {
-                        // snippetDataUrl is a data: URL, so no need to fetch it or append params
-                        // But wait, the original code fetches it?
-                        // "const res = await fetch(snippetDataUrl);"
-                        // Fetching a data URL is valid and returns a blob/buffer.
-                        // We don't need to append params to a data URL.
                         const res = await fetch(snippetDataUrl);
                         if (res.ok) locationSnippet = await res.arrayBuffer();
                     }
@@ -945,23 +1258,23 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
             children.push(
                 new Paragraph({
                     text: `${globalIndex}. ${snag.title}`,
-                    heading: "Heading3",
-                    spacing: { before: 400, after: 100 },
+                    heading: "Heading2",
+                    spacing: { before: 200, after: 100 },
                 }),
                 new Paragraph({
                     children: [
-                        new TextRun({ text: "Location: ", bold: true }),
-                        new TextRun(snag.location || '—'),
-                        new TextRun({ text: " | Status: ", bold: true }),
-                        new TextRun(snag.status),
+                        new TextRun({ text: "Status: ", bold: true }),
+                        new TextRun(snag.status || 'open'),
                         new TextRun({ text: " | Priority: ", bold: true }),
-                        new TextRun(snag.priority),
+                        new TextRun(snag.priority || 'medium'),
+                        new TextRun({ text: " | Location: ", bold: true }),
+                        new TextRun(formatFieldValue(snag.location)),
                         ...(snag.due_date ? [
                             new TextRun({ text: " | Due: ", bold: true }),
                             new TextRun(snag.due_date),
                         ] : []),
                     ],
-                    spacing: { after: 150 },
+                    spacing: { after: 100 },
                 }),
                 ...(snag.description
                     ? [
@@ -970,7 +1283,7 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
                                 new TextRun({ text: "Description: ", bold: true }),
                                 new TextRun(snag.description),
                             ],
-                            spacing: { after: 200 },
+                            spacing: { after: 150 },
                         }),
                     ]
                     : []),
@@ -991,13 +1304,61 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
             });
 
             if (images.length > 0) {
-                children.push(new Paragraph({ children: images }));
+                children.push(new Paragraph({ children: images, spacing: { after: 150 } }));
             } else {
-                children.push(new Paragraph({ text: "No photos attached.", style: "Italic" }));
+                children.push(new Paragraph({ text: "No photos attached.", style: "Italic", spacing: { after: 150 } }));
             }
         }
         await yieldToMain();
     }
+
+    // === BACK PAGE WITH COMPANY DETAILS ===
+    children.push(
+        new PageBreak(),
+        new Paragraph({
+            text: "Report prepared by:",
+            spacing: { after: 100 },
+        }),
+        new Paragraph({
+            children: [
+                new TextRun({
+                    text: "BPAS Architects & Engineers",
+                    bold: true,
+                    size: 22,
+                }),
+            ],
+            spacing: { after: 150 },
+        }),
+        new Paragraph({
+            children: [
+                new TextRun("Office F14, First Floor, Willowbridge Shopping Centre"),
+            ],
+            spacing: { after: 50 },
+        }),
+        new Paragraph({
+            children: [
+                new TextRun("39 Carl Cronje Drive, Tygervalley, 7530"),
+            ],
+            spacing: { after: 50 },
+        }),
+        new Paragraph({
+            children: [
+                new TextRun("Tel: +27 (0) 21 914 5960"),
+            ],
+            spacing: { after: 50 },
+        }),
+        new Paragraph({
+            children: [
+                new TextRun("Email: info@bpas.co.za"),
+            ],
+            spacing: { after: 50 },
+        }),
+        new Paragraph({
+            children: [
+                new TextRun("Web: www.bpas.co.za"),
+            ],
+        })
+    );
 
     onProgress?.('Finalizing Word document...');
     const doc = new Document({
