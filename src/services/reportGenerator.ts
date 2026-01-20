@@ -635,7 +635,7 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
             0: { cellWidth: 30, halign: 'center' },
             1: { cellWidth: 100 },
             2: { cellWidth: 90 },
-            3: { halign: 'center', cellWidth: 50 },
+            3: { halign: 'center', cellWidth: 65 },
             4: { halign: 'center', cellWidth: 50 },
             5: { halign: 'right', cellWidth: 60 },
         },
@@ -795,7 +795,7 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                 consumedHeight += 10;
             }
             
-            return consumedHeight;
+            return consumedHeight + 5; // padding to avoid overlap with following blocks
         };
 
         // Helper: Render images in grid layout (2 per row)
@@ -841,7 +841,7 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                 const photos: string[] = [];
 
                 if (photoRows && photoRows.length > 0) {
-                    const photoPromises = photoRows.slice(0, 3).map(async (row) => { // Allow up to 3 photos
+                    const photoPromises = photoRows.slice(0, 2).map(async (row) => { // Limit to 2 photos per snag
                         const imgData = await toDataUrl(row.photo_url);
                         if (imgData) {
                             return await downscaleImage(imgData, 1200, 0.7);
@@ -875,8 +875,10 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                 const descriptionLines = snag.description
                     ? doc.splitTextToSize(snag.description, pageWidth - margin * 2 - 20)
                     : [];
+                const titleLinesEstimate = doc.splitTextToSize(`${globalIndex}. ${snag.title}`, pageWidth - margin * 2 - 20);
+                const titleHeightEstimate = titleLinesEstimate.length * 12 + 14;
                 const descriptionHeight = descriptionLines.length > 0 
-                    ? Math.min(descriptionLines.length, 50) * 10 + 20 
+                    ? Math.min(descriptionLines.length, 50) * 10 + 30 
                     : 0;
                 
                 const imageItems: Array<{ src: string; label: string }> = [];
@@ -888,7 +890,7 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                     : 0;
                 
                 // Total estimated card height
-                const estimatedCardHeight = 8 + 12 + 20 + descriptionHeight + imageHeight + 20;
+                const estimatedCardHeight = titleHeightEstimate + 20 /* badges */ + 20 /* metadata */ + descriptionHeight + imageHeight + 20;
                 
                 // Check page break BEFORE drawing the card
                 ensureSpace(estimatedCardHeight + 10);
