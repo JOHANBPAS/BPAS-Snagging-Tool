@@ -234,12 +234,17 @@ export const SnagDetailModal: React.FC<Props> = ({ snag, isOpen, onClose, onUpda
                         const newPhotos: SnagPhoto[] = [];
                         for (const path of paths) {
                           // path here is actually photo_url from FileUpload (which uses uploadFile)
-                          const saved = await addSnagPhoto(snag.project_id, snag.id, {
+                          const savedId = await addSnagPhoto(snag.project_id, snag.id, {
                             photo_url: path,
                             snag_id: snag.id
                           });
-                          // @ts-ignore
-                          newPhotos.push({ ...saved, id: saved.id || path });
+
+                          newPhotos.push({
+                            id: savedId,
+                            snag_id: snag.id,
+                            photo_url: path,
+                            created_at: new Date().toISOString()
+                          });
                         }
 
                         setPhotos((prev) => [...prev, ...newPhotos]);
@@ -303,7 +308,7 @@ export const SnagDetailModal: React.FC<Props> = ({ snag, isOpen, onClose, onUpda
               const publicUrl = await uploadFile(path, file);
 
               // Add new photo doc
-              const saved = await addSnagPhoto(snag.project_id, snag.id, {
+              const savedId = await addSnagPhoto(snag.project_id, snag.id, {
                 photo_url: publicUrl,
                 snag_id: snag.id
               });
@@ -316,7 +321,13 @@ export const SnagDetailModal: React.FC<Props> = ({ snag, isOpen, onClose, onUpda
               }
 
               // Add to state
-              setPhotos(prev => [...prev, saved as SnagPhoto]);
+              const newPhoto: SnagPhoto = {
+                id: savedId,
+                snag_id: snag.id,
+                photo_url: publicUrl,
+                created_at: new Date().toISOString()
+              };
+              setPhotos(prev => [...prev, newPhoto]);
               setAnnotatingUrl(null);
             } catch (e) {
               console.error("Error saving annotation", e);
