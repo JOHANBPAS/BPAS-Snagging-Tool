@@ -1,12 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { ProjectCard } from '../components/ProjectCard';
-import { supabase } from '../lib/supabaseClient';
+import { createProject, getAllOpenSnags, getProjects } from '../services/dataService';
 import { Project } from '../types';
-import { Database } from '../types/supabase';
 import { useAuth } from '../hooks/useAuth';
 
 const Projects: React.FC = () => {
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [snagCounts, setSnagCounts] = useState<Record<string, number>>({});
   const [form, setForm] = useState<Partial<Project>>({ name: '' });
@@ -15,30 +14,20 @@ const Projects: React.FC = () => {
 
   const fetchProjects = async () => {
     try {
-      const { data: projectsData, error } = await supabase
-        .from('projects')
-        .select('*, creator:profiles!created_by(full_name)')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      setProjects((projectsData as Project[]) || []);
+      const projectsData = await getProjects();
+      // For now, creator name might be missing if we don't fetch user profiles
+      // We can implement a "getUsers" later or store creator display name on project
+      setProjects(projectsData);
+
+      // Fetch snag counts
+      const countsList = await getAllOpenSnags();
+      const countsMap: Record<string, number> = {};
+      countsList.forEach(c => countsMap[c.projectId] = c.count);
+      setSnagCounts(countsMap);
+
     } catch (err: any) {
       console.error('Error fetching projects:', err);
       setError(err.message || 'Failed to load projects');
-    }
-
-    // Fetch open snags count for all projects
-    // Note: In a larger app, this should be a database view or a function
-    const { data: snagsData } = await supabase
-      .from('snags')
-      .select('project_id, status')
-      .neq('status', 'verified'); // Count everything not verified as "open" or "in progress"
-
-    if (snagsData) {
-      const counts: Record<string, number> = {};
-      snagsData.forEach((snag: { project_id: string; status: string }) => {
-        counts[snag.project_id] = (counts[snag.project_id] || 0) + 1;
-      });
-      setSnagCounts(counts);
     }
   };
 
@@ -51,31 +40,28 @@ const Projects: React.FC = () => {
     if (!form.name || !user) return;
     setLoading(true);
     setError(null);
-    // Ensure a profile exists for the current user to satisfy FK constraints
-    if (!profile) {
-      await supabase.from('profiles').upsert({
-        id: user.id,
-        full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
-        role: (user.user_metadata?.role as string) || 'architect',
-      } as Database['public']['Tables']['profiles']['Insert']);
+
+    try {
+      await createProject({
+        name: form.name,
+        client_name: form.client_name,
+        address: form.address,
+        start_date: form.start_date,
+        end_date: form.end_date,
+        project_number: form.project_number,
+        inspection_type: form.inspection_type,
+        inspection_scope: form.inspection_scope,
+        inspection_description: form.inspection_description,
+        status: 'active'
+      });
+
+      await fetchProjects();
+      setForm({ name: '', client_name: '', address: '', start_date: '', end_date: '' });
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
-    const { error: insertError } = await supabase.from('projects').insert({
-      name: form.name,
-      client_name: form.client_name,
-      address: form.address,
-      start_date: form.start_date,
-      end_date: form.end_date,
-      status: 'active',
-      created_by: user.id,
-      project_number: form.project_number,
-      inspection_type: form.inspection_type,
-      inspection_scope: form.inspection_scope,
-      inspection_description: form.inspection_description,
-    } as Database['public']['Tables']['projects']['Insert']);
-    if (insertError) setError(insertError.message);
-    await fetchProjects();
-    setForm({ name: '', client_name: '', address: '', start_date: '', end_date: '' });
-    setLoading(false);
   };
 
   return (

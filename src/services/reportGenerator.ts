@@ -1,9 +1,9 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { brandAssets, brandColors } from '../lib/brand';
-import { supabase } from '../lib/supabaseClient';
+import { getProjectPlans, getSnagPhotos } from './dataService';
 import { Project, Snag } from '../types';
-import { Database } from '../types/supabase';
+
 
 export interface ReportGenerationOptions {
     project: Project;
@@ -85,19 +85,16 @@ const getFloorPlans = async (project: Project, snags: Snag[], onProgress?: (mess
     // If no snags are placed, return empty
     if (relevantMap.size === 0) return [];
 
-    // 2. Try fetching from project_plans table
-    const { data: plans } = await supabase
-        .from('project_plans')
-        .select('*')
-        .eq('project_id', project.id)
-        .order('order', { ascending: true });
+    // 2. Fetch from dataService
+    const plans = await getProjectPlans(project.id);
 
     const results: Array<{ planId: string; name: string; page: number; image: string }> = [];
 
     if (plans && plans.length > 0) {
         // Process plans in parallel
         const planPromises = plans.map(async (plan) => {
-            // Skip if this plan is not used by any snag
+            // Keep existing logic...
+
             if (!relevantMap.has(plan.id)) return [];
 
             const requiredPages = relevantMap.get(plan.id)!;
@@ -317,17 +314,17 @@ const formatFieldValue = (value: string | null | undefined): string => {
 const drawSlimHeader = (targetDoc: jsPDF, projectName: string, pageNum: number, totalPages: number) => {
     const pageWidth = targetDoc.internal.pageSize.getWidth();
     const margin = 40;
-    
+
     // Draw a thin line separator
     targetDoc.setDrawColor(226, 232, 240);
     targetDoc.setLineWidth(0.5);
     targetDoc.line(margin, 25, pageWidth - margin, 25);
-    
+
     // Left: Project name
     targetDoc.setFontSize(9);
     targetDoc.setTextColor(107, 114, 128);
     targetDoc.text(projectName, margin, 15);
-    
+
     // Right: Page number
     targetDoc.text(`Page ${pageNum} of ${totalPages}`, pageWidth - margin, 15, { align: 'right' });
 };
@@ -336,29 +333,29 @@ const drawCoverPage = async (doc: jsPDF, project: Project, snags: Snag[]): Promi
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     const margin = 40;
-    
+
     // Full page letterhead for cover
     const letterheadData = await toDataUrl(brandAssets.letterhead);
     if (letterheadData) {
         doc.addImage(letterheadData, 'PNG', 0, 0, pageWidth, pageHeight);
     }
-    
+
     // Cover page content - centered
     let y = pageHeight * 0.35;
-    
+
     doc.setFontSize(28);
     doc.setTextColor(brandColors.black);
     doc.text('SNAGGING REPORT', pageWidth / 2, y, { align: 'center' });
-    
+
     y += 40;
     doc.setFontSize(14);
     doc.setTextColor(brandColors.grey);
     doc.text(project.name, pageWidth / 2, y, { align: 'center' });
-    
+
     y += 35;
     doc.setFontSize(11);
     doc.text(`Client: ${project.client_name || 'Not Specified'}`, pageWidth / 2, y, { align: 'center' });
-    
+
     // Add project number if available
     if (project.project_number) {
         y += 25;
@@ -366,12 +363,12 @@ const drawCoverPage = async (doc: jsPDF, project: Project, snags: Snag[]): Promi
         doc.setTextColor(brandColors.grey);
         doc.text(`Project No: ${project.project_number}`, pageWidth / 2, y, { align: 'center' });
     }
-    
+
     y += 30;
     doc.setFontSize(10);
     doc.setTextColor(150, 155, 160);
     doc.text(`Date of Inspection: ${new Date().toLocaleDateString()}`, pageWidth / 2, y, { align: 'center' });
-    
+
     return 1;
 };
 
@@ -379,38 +376,38 @@ const drawExecutiveSummary = async (doc: jsPDF, project: Project, snags: Snag[])
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     const margin = 40;
-    
+
     doc.addPage();
-    
+
     // Slim header
     const totalPages = doc.getNumberOfPages();
     drawSlimHeader(doc, project.name, 2, totalPages);
-    
+
     let y = 50;
-    
+
     doc.setFontSize(16);
     doc.setTextColor(brandColors.black);
     doc.text('Executive Summary', margin, y);
-    
+
     y += 30;
-    
+
     // Count snags by status
     const statusCounts: Record<string, number> = {};
     const priorityCounts: Record<string, number> = {};
-    
+
     snags.forEach(snag => {
         const status = snag.status || 'open';
         const priority = snag.priority || 'medium';
         statusCounts[status] = (statusCounts[status] || 0) + 1;
         priorityCounts[priority] = (priorityCounts[priority] || 0) + 1;
     });
-    
+
     // Status breakdown
     doc.setFontSize(12);
     doc.setTextColor(brandColors.black);
     doc.text('Status Breakdown:', margin, y);
     y += 18;
-    
+
     doc.setFontSize(10);
     Object.entries(statusCounts).forEach(([status, count]) => {
         const color = getStatusColor(status);
@@ -420,15 +417,15 @@ const drawExecutiveSummary = async (doc: jsPDF, project: Project, snags: Snag[])
         doc.text(`${status.charAt(0).toUpperCase() + status.slice(1)}: ${count} snag${count !== 1 ? 's' : ''}`, margin + 14, y);
         y += 12;
     });
-    
+
     y += 10;
-    
+
     // Priority breakdown
     doc.setFontSize(12);
     doc.setTextColor(brandColors.black);
     doc.text('Priority Breakdown:', margin, y);
     y += 18;
-    
+
     doc.setFontSize(10);
     Object.entries(priorityCounts).forEach(([priority, count]) => {
         const color = getPriorityColor(priority);
@@ -438,18 +435,18 @@ const drawExecutiveSummary = async (doc: jsPDF, project: Project, snags: Snag[])
         doc.text(`${priority.charAt(0).toUpperCase() + priority.slice(1)}: ${count} snag${count !== 1 ? 's' : ''}`, margin + 14, y);
         y += 12;
     });
-    
+
     y += 15;
-    
+
     // Project details
     doc.setFontSize(11);
     doc.setTextColor(brandColors.black);
     doc.text('Project Details:', margin, y);
     y += 16;
-    
+
     doc.setFontSize(10);
     doc.setTextColor(brandColors.grey);
-    
+
     const details = [
         ['Project:', project.name],
         ['Client:', project.client_name || 'Not Specified'],
@@ -458,7 +455,7 @@ const drawExecutiveSummary = async (doc: jsPDF, project: Project, snags: Snag[])
         ...(project.inspection_type ? [['Inspection Type:', project.inspection_type]] : []),
         ...(project.inspection_scope ? [['Scope:', project.inspection_scope]] : []),
     ];
-    
+
     details.forEach(([label, value]) => {
         doc.setTextColor(107, 114, 128);
         doc.text(label, margin, y);
@@ -466,14 +463,14 @@ const drawExecutiveSummary = async (doc: jsPDF, project: Project, snags: Snag[])
         doc.text(value, margin + 80, y);
         y += 12;
     });
-    
+
     if (project.inspection_description) {
         y += 10;
         doc.setFontSize(10);
         doc.setTextColor(107, 114, 128);
         doc.text('Inspection Notes:', margin, y);
         y += 12;
-        
+
         doc.setTextColor(brandColors.grey);
         const descLines = doc.splitTextToSize(project.inspection_description, pageWidth - margin * 2 - 20);
         doc.text(descLines, margin + 10, y);
@@ -493,7 +490,7 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
     // Draw cover page
     onProgress?.('Creating cover page...');
     await drawCoverPage(doc, project, snags);
-    
+
     // Draw executive summary
     onProgress?.('Creating executive summary...');
     await drawExecutiveSummary(doc, project, snags);
@@ -548,7 +545,7 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
             doc.setFontSize(10);
             doc.setTextColor(brandColors.black);
             doc.text(`${plan.name} • Page ${plan.page}`, margin, margin + 12);
-            
+
             const totalPages = doc.getNumberOfPages();
             doc.setFontSize(9);
             doc.setTextColor(brandColors.grey);
@@ -594,7 +591,7 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
     doc.addPage('a4', 'p');
     const listPageNum = doc.getNumberOfPages();
     drawSlimHeader(doc, project.name, listPageNum, doc.getNumberOfPages());
-    
+
     // Generous top padding to clear header and any background artifacts
     let listStartY = margin + 80;
 
@@ -681,7 +678,7 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
         const safeTop = margin + 60;
         const pageBottomMargin = pageHeight - (margin + 80);
         let currentY = safeTop;
-        
+
         doc.setFontSize(16);
         doc.setTextColor(brandColors.black);
         doc.text('Snag Details', margin, currentY);
@@ -711,28 +708,28 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
         const renderBadges = (status: string, priority: string): number => {
             const badgeHeight = 12;
             const badgePadding = 4;
-            
+
             doc.setFontSize(8);
             const statusColor = getStatusColor(status);
             const priorityColor = getPriorityColor(priority);
-            
+
             const statusText = (status || 'open').toUpperCase();
             const statusWidth = doc.getTextWidth(statusText) + badgePadding * 2;
-            
+
             doc.setFillColor(...statusColor);
             doc.roundedRect(margin, currentY - 4, statusWidth, badgeHeight, 2, 2, 'F');
             doc.setTextColor(255, 255, 255);
             doc.text(statusText, margin + statusWidth / 2, currentY + 2, { align: 'center', baseline: 'middle' });
-            
+
             const priorityText = (priority || 'medium').toUpperCase();
             const priorityWidth = doc.getTextWidth(priorityText) + badgePadding * 2;
             const priorityX = margin + statusWidth + 8;
-            
+
             doc.setFillColor(...priorityColor);
             doc.roundedRect(priorityX, currentY - 4, priorityWidth, badgeHeight, 2, 2, 'F');
             doc.setTextColor(255, 255, 255);
             doc.text(priorityText, priorityX + priorityWidth / 2, currentY + 2, { align: 'center', baseline: 'middle' });
-            
+
             return badgeHeight + 8;
         };
 
@@ -740,14 +737,14 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
         const renderMetadata = (location: string, dueDate: string): number => {
             doc.setFontSize(7);
             doc.setTextColor(brandColors.grey);
-            
+
             // Location section
             doc.text('LOCATION', margin, currentY - 2);
             doc.setFontSize(8);
             doc.setTextColor(brandColors.black);
             const locationText = formatFieldValue(location);
             doc.text(locationText, margin, currentY + 6, { maxWidth: 120 });
-            
+
             // Due date section (right-aligned)
             doc.setFontSize(7);
             doc.setTextColor(brandColors.grey);
@@ -756,33 +753,33 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
             doc.setTextColor(brandColors.black);
             const dueText = dueDate || 'Not Set';
             doc.text(dueText, pageWidth - margin - 60, currentY + 6);
-            
+
             return 20; // Metadata row height
         };
 
         // Helper: Render description with text wrapping and max height constraint
         const renderDescription = (description: string | null | undefined): number => {
             if (!description) return 0;
-            
+
             const descriptionLines = doc.splitTextToSize(description, pageWidth - margin * 2 - 20);
             const maxDescriptionLines = 50;
             const limitedLines = descriptionLines.slice(0, maxDescriptionLines);
             const isTruncated = descriptionLines.length > maxDescriptionLines;
-            
+
             // Description label
             doc.setFontSize(9);
             doc.setTextColor(107, 114, 128);
             doc.setFont('helvetica', 'bold');
             doc.text('Description:', margin, currentY);
-            
+
             // Description text
             currentY += 10;
             doc.setFont('helvetica', 'normal');
             doc.setTextColor(brandColors.black);
             doc.text(limitedLines, margin, currentY);
-            
+
             let consumedHeight = 10 + limitedLines.length * 10;
-            
+
             if (isTruncated) {
                 currentY += limitedLines.length * 10 + 5;
                 doc.setTextColor(150, 155, 160);
@@ -799,32 +796,32 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
         // Helper: Render images in grid layout (2 per row)
         const renderImages = (imageItems: Array<{ src: string; label: string }>): number => {
             if (imageItems.length === 0) return 0;
-            
+
             const imgWidth = (pageWidth - margin * 2 - 40) / 2;
             const imgHeight = 120;
             const rowHeight = imgHeight + 25;
             const numRows = Math.ceil(imageItems.length / 2);
-            
+
             let imageY = currentY + 5;
-            
+
             for (let imgIdx = 0; imgIdx < imageItems.length; imgIdx++) {
                 const col = imgIdx % 2;
                 const row = Math.floor(imgIdx / 2);
                 const imgX = margin + 10 + col * (imgWidth + 15);
                 const imgY = imageY + row * rowHeight;
-                
+
                 // Image label
                 doc.setFontSize(8);
                 doc.setTextColor(107, 114, 128);
                 doc.text(imageItems[imgIdx].label, imgX, imgY - 5);
-                
+
                 // Image with border
                 doc.setDrawColor(200, 210, 220);
                 doc.setLineWidth(0.5);
                 doc.rect(imgX, imgY, imgWidth, imgHeight);
                 doc.addImage(imageItems[imgIdx].src, 'JPEG', imgX, imgY, imgWidth, imgHeight);
             }
-            
+
             return numRows * rowHeight;
         };
 
@@ -835,7 +832,7 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
             const batchResults = await Promise.all(batch.map(async (snag) => {
                 onProgress?.(`Fetching photos for snag ${snagIndexMap.get(snag.id)}...`);
 
-                const { data: photoRows } = await supabase.from('snag_photos').select('photo_url').eq('snag_id', snag.id);
+                const photoRows = await getSnagPhotos(project.id, snag.id);
                 const photos: string[] = [];
 
                 if (photoRows && photoRows.length > 0) {
@@ -875,21 +872,21 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                     : [];
                 const titleLinesEstimate = doc.splitTextToSize(`${globalIndex}. ${snag.title}`, pageWidth - margin * 2 - 20);
                 const titleHeightEstimate = titleLinesEstimate.length * 12 + 14;
-                const descriptionHeight = descriptionLines.length > 0 
-                    ? Math.min(descriptionLines.length, 50) * 10 + 30 
+                const descriptionHeight = descriptionLines.length > 0
+                    ? Math.min(descriptionLines.length, 50) * 10 + 30
                     : 0;
-                
+
                 const imageItems: Array<{ src: string; label: string }> = [];
                 if (locationSnippet) imageItems.push({ src: locationSnippet, label: 'Location on Plan' });
                 photos.forEach((photo, idx) => imageItems.push({ src: photo, label: `Photo ${idx + 1}` }));
-                
-                const imageHeight = imageItems.length > 0 
+
+                const imageHeight = imageItems.length > 0
                     ? Math.ceil(imageItems.length / 2) * (120 + 25)
                     : 0;
-                
+
                 // Total estimated card height
                 const estimatedCardHeight = titleHeightEstimate + 20 /* badges */ + 20 /* metadata */ + descriptionHeight + imageHeight + 30; // extra padding to avoid edge overlap
-                
+
                 // Check page break BEFORE drawing the card
                 ensureSpace(estimatedCardHeight + 10);
 
@@ -897,10 +894,10 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                 const cardX = margin - 10;
                 const cardW = pageWidth - margin * 2 + 20;
                 const cardStartY = currentY - 8;
-                
+
                 doc.setFillColor(248, 250, 252);
                 doc.roundedRect(cardX, cardStartY, cardW, estimatedCardHeight + 16, 4, 4, 'F');
-                
+
                 doc.setDrawColor(226, 232, 240);
                 doc.setLineWidth(0.5);
                 doc.roundedRect(cardX, cardStartY, cardW, estimatedCardHeight + 16, 4, 4, 'S');
@@ -941,7 +938,7 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
     doc.addPage();
     const finalPageNum = doc.getNumberOfPages();
     drawSlimHeader(doc, project.name, finalPageNum, doc.getNumberOfPages());
-    
+
     let finalY = pageHeight - 220;
     doc.setFontSize(9);
     doc.setTextColor(107, 114, 128);
@@ -949,7 +946,7 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
     doc.setFontSize(10);
     doc.setTextColor(brandColors.black);
     doc.text('BPAS Architects', margin, finalY + 14);
-    
+
     doc.setFontSize(8);
     doc.setTextColor(107, 114, 128);
     const contactDetails = [
@@ -959,11 +956,11 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
         'Email: info@bpas.co.za',
         'Web: www.bpas.co.za',
     ];
-    
+
     contactDetails.forEach((line, idx) => {
         doc.text(line, margin, finalY + 28 + idx * 8);
     });
-    
+
     // Directors list
     finalY += 90;
     doc.setFontSize(7);
@@ -1266,17 +1263,17 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
         ...snags
             .sort((a, b) => (snagIndexMap.get(a.id) || 0) - (snagIndexMap.get(b.id) || 0))
             .map(snag =>
-            new TableRow({
-                children: [
-                    String(snagIndexMap.get(snag.id) || '-'),
-                    snag.title,
-                    formatFieldValue(snag.location),
-                    snag.status || 'open',
-                    snag.priority || 'medium',
-                    snag.due_date || 'Not Set'
-                ].map(text => new TableCell({ children: [new Paragraph(text)] }))
-            })
-        )
+                new TableRow({
+                    children: [
+                        String(snagIndexMap.get(snag.id) || '-'),
+                        snag.title,
+                        formatFieldValue(snag.location),
+                        snag.status || 'open',
+                        snag.priority || 'medium',
+                        snag.due_date || 'Not Set'
+                    ].map(text => new TableCell({ children: [new Paragraph(text)] }))
+                })
+            )
     ];
 
     children.push(
@@ -1303,7 +1300,7 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
         const batchResults = await Promise.all(batch.map(async (snag) => {
             onProgress?.(`Fetching photos for snag ${snagIndexMap.get(snag.id)}...`);
 
-            const { data: photoRows } = await supabase.from('snag_photos').select('photo_url').eq('snag_id', snag.id);
+            const photoRows = await getSnagPhotos(project.id, snag.id);
             const photos: ArrayBuffer[] = [];
 
             if (photoRows && photoRows.length > 0) {

@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { supabase } from '../../lib/supabaseClient';
+import { updateProject } from '../../services/dataService';
 import { Project } from '../../types';
-import { Database } from '../../types/supabase';
 
 interface Props {
     project: Project;
@@ -35,31 +34,12 @@ export const EditProjectModal: React.FC<Props> = ({ project, onClose, onUpdate }
         setError(null);
 
         try {
-            const updates: Database['public']['Tables']['projects']['Update'] = {
-                name: form.name,
-                client_name: form.client_name || null,
-                address: form.address || null,
-                start_date: form.start_date || null,
-                end_date: form.end_date || null,
-                status: form.status,
-                inspection_type: form.inspection_type || null,
-                inspection_description: form.inspection_description || null,
-                inspection_scope: form.inspection_scope || null,
-                project_number: form.project_number || null,
-            };
-
-            const { data, error: updateError } = await supabase
-                .from('projects')
-                .update(updates)
-                .eq('id', project.id)
-                .select()
-                .single();
-
-            if (updateError) throw updateError;
-            if (data) {
-                onUpdate(data as Project);
-                onClose();
-            }
+            await updateProject(project.id, {
+                ...form,
+                status: form.status as any
+            });
+            onUpdate({ ...project, ...form } as Project);
+            onClose();
         } catch (err: any) {
             setError(err.message);
         } finally {

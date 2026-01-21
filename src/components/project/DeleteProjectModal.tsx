@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../lib/supabaseClient';
+import { deleteProject } from '../../services/dataService';
 import { Project } from '../../types';
 
 interface Props {
@@ -13,7 +13,6 @@ export const DeleteProjectModal: React.FC<Props> = ({ project, onClose }) => {
     const [confirmText, setConfirmText] = useState('');
     const [isDeleting, setIsDeleting] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [deletionProgress, setDeletionProgress] = useState<string>('');
 
     const handleDelete = async () => {
         if (confirmText !== project.name) {
@@ -25,137 +24,12 @@ export const DeleteProjectModal: React.FC<Props> = ({ project, onClose }) => {
         setError(null);
 
         try {
-            // Step 1: Fetch and delete floor plan files from Storage
-            setDeletionProgress('Deleting floor plans...');
-            const { data: planRecords } = await supabase
-                .from('project_plans')
-                .select('url')
-                .eq('project_id', project.id);
-
-            if (planRecords && planRecords.length > 0) {
-                const planFilePaths = planRecords
-                    .map((plan) => {
-                        // Extract file path from URL (assuming URL format: https://.../storage/v1/object/public/floor-plans/filename.pdf)
-                        const url = plan.url;
-                        const match = url.match(/floor-plans\/(.+)$/);
-                        return match ? match[1] : null;
-                    })
-                    .filter(Boolean) as string[];
-
-                if (planFilePaths.length > 0) {
-                    const { error: storageError } = await supabase.storage
-                        .from('floor-plans')
-                        .remove(planFilePaths);
-
-                    if (storageError) {
-                        console.warn('Failed to delete some floor plans from storage:', storageError);
-                        // Continue anyway - we'll delete the DB records
-                    }
-                }
-            }
-
-            // Step 2: Fetch and delete snag photos from Storage
-            setDeletionProgress('Deleting snag photos...');
-            const { data: snags } = await supabase
-                .from('snags')
-                .select('id')
-                .eq('project_id', project.id);
-
-            if (snags && snags.length > 0) {
-                const snagIds = snags.map((s) => s.id);
-                const { data: photoRecords } = await supabase
-                    .from('snag_photos')
-                    .select('photo_url')
-                    .in('snag_id', snagIds);
-
-                if (photoRecords && photoRecords.length > 0) {
-                    const photoFilePaths = photoRecords
-                        .map((photo) => {
-                            const url = photo.photo_url;
-                            const match = url.match(/snag-photos\/(.+)$/);
-                            return match ? match[1] : null;
-                        })
-                        .filter(Boolean) as string[];
-
-                    if (photoFilePaths.length > 0) {
-                        const { error: photoStorageError } = await supabase.storage
-                            .from('snag-photos')
-                            .remove(photoFilePaths);
-
-                        if (photoStorageError) {
-                            console.warn('Failed to delete some snag photos from storage:', photoStorageError);
-                        }
-                    }
-                }
-            }
-
-            // Step 3: Delete report files from Storage (if they exist)
-            setDeletionProgress('Deleting reports...');
-            const { data: reportFiles } = await supabase.storage
-                .from('reports')
-                .list('', {
-                    search: project.id, // Search for files containing project ID
-                });
-
-            if (reportFiles && reportFiles.length > 0) {
-                const reportFilePaths = reportFiles.map((file) => file.name);
-                const { error: reportStorageError } = await supabase.storage
-                    .from('reports')
-                    .remove(reportFilePaths);
-
-                if (reportStorageError) {
-                    console.warn('Failed to delete some reports from storage:', reportStorageError);
-                }
-            }
-
-            // Step 4: Update snags to remove plan references, then delete project_plans
-            setDeletionProgress('Removing project plans...');
-
-            // First, set all snags' plan_id to NULL to avoid foreign key constraint
-            const { error: snagUpdateError } = await supabase
-                .from('snags')
-                .update({ plan_id: null })
-                .eq('project_id', project.id);
-
-            if (snagUpdateError) {
-                console.warn('Failed to update snag plan references:', snagUpdateError);
-                // Continue anyway - this might not be critical
-            }
-
-            // Now delete the project_plans records
-            const { error: plansDeleteError } = await supabase
-                .from('project_plans')
-                .delete()
-                .eq('project_id', project.id);
-
-            if (plansDeleteError) {
-                throw new Error(`Failed to delete project plans: ${plansDeleteError.message}`);
-            }
-
-            // Step 5: Delete the project record (this will cascade delete snags, snag_photos, snag_comments)
-            setDeletionProgress('Deleting project...');
-            const { error: projectDeleteError } = await supabase
-                .from('projects')
-                .delete()
-                .eq('id', project.id);
-
-            if (projectDeleteError) {
-                throw new Error(`Failed to delete project: ${projectDeleteError.message}`);
-            }
-
-            // Success!
-            setDeletionProgress('Project deleted successfully');
-
-            // Small delay to show success message
-            await new Promise((resolve) => setTimeout(resolve, 500));
-
-            // Navigate back to projects list
+            await deleteProject(project.id);
             navigate('/projects');
         } catch (err: any) {
             console.error('Error deleting project:', err);
             setError(err.message || 'Failed to delete project');
             setIsDeleting(false);
-            setDeletionProgress('');
         }
     };
 
@@ -194,14 +68,6 @@ export const DeleteProjectModal: React.FC<Props> = ({ project, onClose }) => {
                             disabled={isDeleting}
                         />
                     </div>
-
-                    {deletionProgress && (
-                        <div className="rounded-lg bg-blue-50 p-3 border border-blue-200">
-                            <p className="text-sm text-blue-700">
-                                {deletionProgress}
-                            </p>
-                        </div>
-                    )}
 
                     {error && (
                         <div className="rounded-lg bg-red-50 p-3 border border-red-200">

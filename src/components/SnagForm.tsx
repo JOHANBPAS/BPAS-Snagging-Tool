@@ -1,14 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { supabase } from '../lib/supabaseClient';
 import { ChecklistField, Profile, Snag, SnagPriority, SnagStatus } from '../types';
-import { Database } from '../types/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { normalizeUuid } from '../lib/format';
 import { resizeImage } from '../lib/imageUtils';
 import { useOfflineStatus } from '../hooks/useOfflineStatus';
-import { queueMutation, queuePhoto } from '../services/offlineStorage';
 
 import { ImageAnnotator } from './ImageAnnotator';
+import { createSnag, updateSnag, uploadFile, addSnagPhoto, getSnagPhotos } from '../services/dataService';
 
 interface Props {
   projectId: string;
@@ -87,13 +85,10 @@ export const SnagForm: React.FC<Props> = ({
         due_date: initialSnag.due_date ?? '',
         assigned_to: initialSnag.assigned_to ?? '',
       });
-
-      // Load existing photos to allow annotation while editing
-      (async () => {
-        const { data } = await supabase.from('snag_photos').select('*').eq('snag_id', initialSnag.id);
-        const rows = (data as { id: string; photo_url: string }[] | null) || [];
-        setExistingPhotos(rows.map((p) => ({ id: p.id, url: p.photo_url })));
-      })();
+      // Fetch existing photos
+      getSnagPhotos(projectId, initialSnag.id).then(photos => {
+        setExistingPhotos(photos.map(p => ({ id: p.id, url: p.photo_url || '' })));
+      }).catch(e => console.error("Error fetching snag photos", e));
     }
   }, [initialSnag]);
 
@@ -118,29 +113,23 @@ export const SnagForm: React.FC<Props> = ({
     };
   }, [pendingPhotos]);
 
-  const uploadPhotos = async (snagId: string) => {
+  const uploadPhotos = async (projectId: string, snagId: string) => {
     if (!pendingPhotos.length) return;
-    const bucket = supabase.storage.from('snag-photos');
+
     for (const { file } of pendingPhotos) {
       try {
         const resizedBlob = await resizeImage(file);
         const ext = file.name.split('.').pop() || 'jpg';
-        const path = `${snagId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-        const { error: uploadError } = await bucket.upload(path, resizedBlob, {
-          cacheControl: '3600',
-          upsert: false,
-          contentType: 'image/jpeg',
+        const path = `snag-photos/${projectId}/${snagId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+
+        const url = await uploadFile(path, resizedBlob);
+        console.log('Uploaded photo', url);
+
+        await addSnagPhoto(projectId, snagId, {
+          photo_url: url,
+          snag_id: snagId
         });
-        if (uploadError) {
-          // eslint-disable-next-line no-console
-          console.warn('Photo upload failed', uploadError.message);
-          continue;
-        }
-        const { data: urlData } = bucket.getPublicUrl(path);
-        await supabase.from('snag_photos').insert({
-          snag_id: snagId,
-          photo_url: urlData.publicUrl,
-        } as Database['public']['Tables']['snag_photos']['Insert']);
+
       } catch (e) {
         console.error('Failed to process image', e);
       }
@@ -164,108 +153,42 @@ export const SnagForm: React.FC<Props> = ({
       setError(null);
 
       const assignedUuid = normalizeUuid(form.assigned_to);
-      let result: Snag | null = null;
 
-      if (isOffline) {
-        // Offline handling with proper ID generation
-        const offlineId = `offline-${crypto.randomUUID()}`;
-        const timestamp = new Date().toISOString();
-
-        const payload = {
+      if (isEditing && initialSnag) {
+        await updateSnag(projectId, initialSnag.id, {
           ...form,
-          project_id: projectId,
-          created_by: user.id,
           assigned_to: assignedUuid,
           plan_x: effectiveCoords.x,
           plan_y: effectiveCoords.y,
           plan_page: effectiveCoords.page,
           plan_id: effectiveCoords.planId,
-        };
-
-        if (isEditing && initialSnag) {
-          await queueMutation('snags', 'UPDATE', { ...payload, id: initialSnag.id });
-          // Optimistic result for UI
-          result = { ...initialSnag, ...payload } as Snag;
-          onUpdated?.(result);
-        } else {
-          // Queue the snag creation with offline ID tracking
-          await queueMutation('snags', 'INSERT', payload, offlineId);
-
-          // Store photos in IndexedDB
-          for (const { file } of pendingPhotos) {
-            await queuePhoto(offlineId, file, file.name);
-          }
-
-          // Create optimistic snag for UI
-          onCreated?.({
-            ...payload,
-            id: offlineId,
-            created_at: timestamp,
-            status: 'open',
-            priority: payload.priority || 'medium',
-            title: payload.title || '',
-          } as Snag);
-        }
-
+        });
+        await uploadPhotos(projectId, initialSnag.id);
+        onUpdated?.({ ...initialSnag, ...form } as Snag);
       } else {
-        // Online handling (existing logic)
-        if (isEditing && initialSnag) {
-          const updates = {
-            ...form,
-            assigned_to: assignedUuid,
-            plan_x: effectiveCoords.x,
-            plan_y: effectiveCoords.y,
-            plan_page: effectiveCoords.page,
-            plan_id: effectiveCoords.planId,
-          };
-          const { data, error: updateError } = await supabase
-            .from('snags')
-            .update(updates as Database['public']['Tables']['snags']['Update'])
-            .eq('id', initialSnag.id)
-            .select('*')
-            .single();
-          if (updateError) throw updateError;
-          result = data as Snag;
-          await uploadPhotos(initialSnag.id);
-          onUpdated?.(result);
-        } else {
-          const payload = {
-            ...form,
-            project_id: projectId,
-            created_by: user.id,
-            assigned_to: assignedUuid,
-            plan_x: effectiveCoords.x,
-            plan_y: effectiveCoords.y,
-            plan_page: effectiveCoords.page,
-            plan_id: effectiveCoords.planId,
-          } as Database['public']['Tables']['snags']['Insert'];
+        const id = await createSnag(projectId, {
+          ...form,
+          assigned_to: assignedUuid,
+          plan_x: effectiveCoords.x,
+          plan_y: effectiveCoords.y,
+          plan_page: effectiveCoords.page,
+          plan_id: effectiveCoords.planId,
+        } as any);
 
-          const { data, error: insertError } = await supabase.from('snags').insert(payload).select('*').single();
-          if (insertError) throw insertError;
-          if (!data) throw new Error('Failed to create snag');
+        await uploadPhotos(projectId, id);
+        onCreated?.({ id, ...form } as Snag);
 
-          result = data as Snag;
-          if (checklistFields.length > 0) {
-            await supabase.from('snag_comments').insert({
-              snag_id: data.id,
-              author_id: data.created_by,
-              comment: `Custom fields: ${JSON.stringify(customValues)}`,
-            } as Database['public']['Tables']['snag_comments']['Insert']);
-          }
-          await uploadPhotos(result.id);
-          onCreated?.(result);
-          setForm({
-            title: '',
-            description: '',
-            priority: 'medium',
-            status: 'open',
-            location: '',
-            category: '',
-            due_date: getTodayDate(), // Reset to today's date for next snag
-            assigned_to: ''
-          });
-          setCustomValues({});
-        }
+        setForm({
+          title: '',
+          description: '',
+          priority: 'medium',
+          status: 'open',
+          location: '',
+          category: '',
+          due_date: getTodayDate(),
+          assigned_to: ''
+        });
+        setCustomValues({});
       }
 
       setPendingPhotos([]);
@@ -275,7 +198,7 @@ export const SnagForm: React.FC<Props> = ({
       }
     } catch (err: any) {
       console.error('Error saving snag:', err);
-      alert(err.message || 'Failed to save snag');
+      setError(err.message || 'Failed to save snag');
     } finally {
       setLoading(false);
       setIsSubmitting(false);
@@ -338,7 +261,7 @@ export const SnagForm: React.FC<Props> = ({
             className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-brand focus:bg-white focus:outline-none"
           />
           <datalist id="locations-list">
-            {existingLocations.map((loc) => (
+            {existingLocations?.map((loc) => (
               <option key={loc} value={loc} />
             ))}
           </datalist>
@@ -454,52 +377,6 @@ export const SnagForm: React.FC<Props> = ({
           </div>
         </div>
       )}
-      {annotatingPhoto && (
-        <ImageAnnotator
-          imageSrc={annotatingPhoto.src}
-          onCancel={() => setAnnotatingPhoto(null)}
-          onSave={(file) => {
-            const newPhotos = [...pendingPhotos];
-            newPhotos[annotatingPhoto.index] = {
-              file,
-              preview: URL.createObjectURL(file),
-            };
-            setPendingPhotos(newPhotos);
-            setAnnotatingPhoto(null);
-          }}
-        />
-      )}
-
-      {annotatingExisting && (
-        <ImageAnnotator
-          imageSrc={annotatingExisting.url}
-          onCancel={() => setAnnotatingExisting(null)}
-          onSave={async (file) => {
-            const bucket = supabase.storage.from('snag-photos');
-            const path = `${initialSnag?.id || 'snag'}/${Date.now()}-annotated.jpg`;
-            const { error: uploadError } = await bucket.upload(path, file, {
-              contentType: 'image/jpeg',
-              cacheControl: '3600',
-              upsert: false,
-            });
-            if (!uploadError) {
-              const { data: urlData } = bucket.getPublicUrl(path);
-              const publicUrl = urlData.publicUrl;
-
-              if (annotatingExisting.id) {
-                await supabase.from('snag_photos').delete().eq('id', annotatingExisting.id);
-              }
-              await supabase.from('snag_photos').insert({ snag_id: initialSnag?.id || '', photo_url: publicUrl });
-
-              setExistingPhotos((prev) => [
-                ...prev.filter((p) => p.id !== annotatingExisting.id),
-                { id: publicUrl, url: publicUrl },
-              ]);
-            }
-            setAnnotatingExisting(null);
-          }}
-        />
-      )}
 
       <div className="space-y-2">
         <span className="text-sm text-slate-600">Attach photos</span>
@@ -511,7 +388,7 @@ export const SnagForm: React.FC<Props> = ({
           onChange={(e) => handlePhotoSelect(e.target.files)}
           className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-brand focus:outline-none"
         />
-        {(pendingPhotos.length > 0 || existingPhotos.length > 0) && (
+        {(pendingPhotos.length > 0) && (
           <div className="flex flex-wrap gap-2">
             {pendingPhotos.map((photo, idx) => (
               <div key={photo.preview + idx} className="relative group">
@@ -532,22 +409,25 @@ export const SnagForm: React.FC<Props> = ({
                 </button>
               </div>
             ))}
-
-            {existingPhotos.map((photo) => (
-              <div key={photo.id} className="relative group">
-                <img
-                  src={photo.url}
-                  className="h-20 w-20 rounded-lg object-cover cursor-pointer border border-slate-200"
-                  onClick={() => setAnnotatingExisting(photo)}
-                />
-                <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg pointer-events-none">
-                  <span className="text-xs text-white font-medium">Annotate</span>
-                </div>
-              </div>
-            ))}
           </div>
         )}
       </div>
+
+      {annotatingPhoto && (
+        <ImageAnnotator
+          imageSrc={annotatingPhoto.src}
+          onCancel={() => setAnnotatingPhoto(null)}
+          onSave={(file) => {
+            const newPhotos = [...pendingPhotos];
+            newPhotos[annotatingPhoto.index] = {
+              file,
+              preview: URL.createObjectURL(file),
+            };
+            setPendingPhotos(newPhotos);
+            setAnnotatingPhoto(null);
+          }}
+        />
+      )}
     </form>
   );
 };

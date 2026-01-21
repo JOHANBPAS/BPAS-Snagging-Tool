@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { supabase } from '../../lib/supabaseClient';
 import imageCompression from 'browser-image-compression';
+import { uploadFile } from '../../services/dataService'; // Import the helper
 
 interface Props {
   label?: string;
-  bucket: string;
+  bucket: string; // Acts as path prefix in Firebase
   onUploaded: (publicUrl: string | string[]) => void;
   className?: string;
 }
@@ -71,17 +71,17 @@ export const FileUpload: React.FC<Props> = ({ label = 'Upload file', bucket, onU
       canvas.toBlob(async (blob) => {
         if (!blob) return reject('Blob failed');
         const newName = `${file.name.replace(/\.pdf$/i, '')}_page_${pageIndex + 1}.jpg`;
-        const newFile = new File([blob], newName, { type: 'image/jpeg' });
+        // const newFile = new File([blob], newName, { type: 'image/jpeg' }); // Not strictly needed for uploadBytes which accepts Blob
 
         const fileName = `${crypto.randomUUID()}.jpg`;
-        const { error: uploadError } = await supabase.storage.from(bucket).upload(fileName, newFile, {
-          cacheControl: '3600',
-          upsert: false,
-        });
+        const path = `${bucket}/${fileName}`;
 
-        if (uploadError) return reject(uploadError.message);
-        const { data } = supabase.storage.from(bucket).getPublicUrl(fileName);
-        resolve(data.publicUrl);
+        try {
+          const url = await uploadFile(path, blob);
+          resolve(url);
+        } catch (e: any) {
+          reject(e.message);
+        }
       }, 'image/jpeg', 0.85);
     });
   };
@@ -153,20 +153,11 @@ export const FileUpload: React.FC<Props> = ({ label = 'Upload file', bucket, onU
 
       const ext = fileToUpload.name.split('.').pop();
       const fileName = `${crypto.randomUUID()}.${ext}`;
+      const path = `${bucket}/${fileName}`;
 
-      const { error: uploadError } = await supabase.storage.from(bucket).upload(fileName, fileToUpload, {
-        cacheControl: '3600',
-        upsert: false,
-      });
+      const url = await uploadFile(path, fileToUpload);
+      onUploaded(url);
 
-      if (uploadError) {
-        setError(uploadError.message);
-        setUploading(false);
-        return;
-      }
-
-      const { data } = supabase.storage.from(bucket).getPublicUrl(fileName);
-      onUploaded(data.publicUrl);
     } catch (err) {
       setError('Upload failed');
       console.error(err);

@@ -1,0 +1,36 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper function to check if user is signed in
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Projects: Allow all authenticated users to read/create
+    // Update/Delete could be restricted to creator but for now trusted team access
+    match /projects/{projectId} {
+      allow read, write: if isAuthenticated();
+      
+      // Subcollections (snags, plans)
+      match /{document=**} {
+        allow read, write: if isAuthenticated();
+      }
+    }
+
+    // Reports
+    match /project_reports/{reportId} {
+      allow read, write: if isAuthenticated();
+    }
+    
+    // Users
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if request.auth.uid == userId;
+    }
+    
+    // Collection Group query for snags
+    match /{path=**}/snags/{snagId} {
+      allow read: if isAuthenticated();
+    }
+  }
+}

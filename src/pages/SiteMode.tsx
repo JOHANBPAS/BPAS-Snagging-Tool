@@ -1,128 +1,51 @@
 import React from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { supabase } from "../lib/supabaseClient";
-import type { Project, ProjectPlan } from "../types";
+import {
+  getProject,
+  getProjectPlans,
+  subscribeToProjectSnags,
+  createSnag,
+  updateSnag,
+  deleteSnag,
+  addSnagPhoto,
+  uploadFile,
+  getUser
+} from "../services/dataService";
+import type { Project, ProjectPlan, Snag, SnagStatus, SnagPriority } from "../types";
 import { PlanCanvasSkia } from "../site-mode/components/PlanCanvasSkia";
 import { QuickCaptureSheet } from "../site-mode/components/QuickCaptureSheet";
-import { SyncDrawer } from "../site-mode/components/SyncDrawer";
-import { createSiteModeRepositories } from "../site-mode/db";
-import { createSyncWorker } from "../site-mode/syncWorker";
-import { siteModeApi } from "../site-mode/api";
-import type { SnagRecord, SnagStatus, SyncQueueItem } from "../site-mode/types";
-import { queuePhoto } from "../services/offlineStorage";
-import { uploadAllPendingPhotos, uploadPendingPhotosForSnag } from "../services/syncService";
-
-const generateId = () => {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return crypto.randomUUID();
-  }
-  const s4 = () => Math.floor((1 + Math.random()) * 0x10000).toString(16).slice(1);
-  return `${s4()}${s4()}-${s4()}-${s4()}-${s4()}-${s4()}${s4()}${s4()}`;
-};
-
-const toPriority = (value?: "low" | "med" | "high" | "critical") => {
-  if (value === "med" || !value) return "medium";
-  return value;
-};
+import { useAuth } from "../hooks/useAuth";
 
 const SiteMode: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
+
   const [project, setProject] = React.useState<Project | null>(null);
   const [planId, setPlanId] = React.useState<string | null>(null);
   const [planUrl, setPlanUrl] = React.useState<string | null>(null);
   const [plans, setPlans] = React.useState<ProjectPlan[]>([]);
-  const [snags, setSnags] = React.useState<SnagRecord[]>([]);
-  const [pendingCount, setPendingCount] = React.useState({ queued: 0, syncing: 0, failed: 0 });
+  const [snags, setSnags] = React.useState<Snag[]>([]);
+
   const [isSheetOpen, setIsSheetOpen] = React.useState(false);
   const [placePinMode, setPlacePinMode] = React.useState(false);
   const [pendingCoord, setPendingCoord] = React.useState<{ x: number; y: number } | null>(null);
   const [pinTargetSnagId, setPinTargetSnagId] = React.useState<string | null>(null);
   const [toast, setToast] = React.useState<string | null>(null);
   const [online, setOnline] = React.useState(navigator.onLine);
-  const [drawerOpen, setDrawerOpen] = React.useState(false);
-  const [queueItems, setQueueItems] = React.useState<SyncQueueItem[]>([]);
+
   const [pendingPhotos, setPendingPhotos] = React.useState<File[]>([]);
   const [pendingPhotoPreviews, setPendingPhotoPreviews] = React.useState<string[]>([]);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
-  const workerRef = React.useRef<ReturnType<typeof createSyncWorker> | null>(null);
+
   const [bulkMode, setBulkMode] = React.useState(false);
   const [selectedSnags, setSelectedSnags] = React.useState<Set<string>>(new Set());
+
   const [editingSnagId, setEditingSnagId] = React.useState<string | null>(null);
   const [editingSnagPhotos, setEditingSnagPhotos] = React.useState<File[]>([]);
   const [editingSnagPhotoPreviews, setEditingSnagPhotoPreviews] = React.useState<string[]>([]);
 
-  const repos = React.useMemo(() => createSiteModeRepositories(), []);
-
-  const refreshSnags = React.useCallback(async () => {
-    if (!projectId) return;
-    const data = await repos.snags.listByProject(projectId);
-    setSnags(data);
-  }, [projectId, repos.snags]);
-
-  const refreshCounts = React.useCallback(async () => {
-    const counts = await repos.queue.countPending();
-    setPendingCount(counts);
-  }, [repos.queue]);
-
-  const refreshQueueItems = React.useCallback(async () => {
-    const items = await repos.queue.listAll();
-    setQueueItems(items);
-  }, [repos.queue]);
-
-  React.useEffect(() => {
-    if (!projectId) return;
-    const fetchProject = async () => {
-      try {
-        const { data } = await supabase.from("projects").select("*").eq("id", projectId).single();
-        setProject((data as Project) || null);
-      } catch (error) {
-        console.error("[SiteMode] Error fetching project:", error);
-        setToast("Failed to load project");
-      }
-    };
-    const fetchPlans = async () => {
-      try {
-        const { data } = await supabase
-          .from("project_plans")
-          .select("*")
-          .eq("project_id", projectId)
-          .order("order", { ascending: true });
-        const planList = (data as ProjectPlan[]) || [];
-        setPlans(planList);
-        if (planList.length > 0) {
-          setPlanId(planList[0].id);
-          setPlanUrl(planList[0].url);
-        }
-      } catch (error) {
-        console.error("[SiteMode] Error fetching plans:", error);
-        setToast("Failed to load plans");
-      }
-    };
-    const loadLocalData = async () => {
-      try {
-        await refreshSnags();
-        await refreshCounts();
-        await refreshQueueItems();
-        console.log("[SiteMode] Local data loaded successfully");
-      } catch (error) {
-        console.error("[SiteMode] Error loading local data:", error);
-        setToast("Failed to load offline data");
-      }
-    };
-    fetchProject();
-    fetchPlans();
-    loadLocalData();
-  }, [projectId, refreshCounts, refreshQueueItems, refreshSnags]);
-
-  React.useEffect(() => {
-    const timer = window.setInterval(() => {
-      refreshCounts();
-      refreshQueueItems();
-    }, 5000);
-    return () => window.clearInterval(timer);
-  }, [refreshCounts, refreshQueueItems]);
-
+  // Connectivity listener
   React.useEffect(() => {
     const handleOnline = () => setOnline(true);
     const handleOffline = () => setOnline(false);
@@ -134,52 +57,75 @@ const SiteMode: React.FC = () => {
     };
   }, []);
 
+  // Fetch Project & Plans
   React.useEffect(() => {
-    const worker = createSyncWorker({
-      queueRepo: repos.queue,
-      snagRepo: repos.snags,
-      api: siteModeApi,
-      isOnline: async () => navigator.onLine,
-      uploadPendingPhotosForSnag,
-      uploadAllPendingPhotos,
-      intervalMs: 7000,
-    });
-    workerRef.current = worker;
-    worker.start();
-    return () => {
-      worker.stop();
-      workerRef.current = null;
-    };
-  }, [repos.queue, repos.snags]);
+    if (!projectId) return;
 
+    const initData = async () => {
+      try {
+        const proj = await getProject(projectId);
+        setProject(proj);
+
+        const pPlans = await getProjectPlans(projectId);
+        setPlans(pPlans);
+        if (pPlans.length > 0) {
+          setPlanId(pPlans[0].id);
+          setPlanUrl(pPlans[0].url);
+        }
+      } catch (e) {
+        console.error("Failed to load project data", e);
+        setToast("Failed to load project");
+      }
+    };
+    initData();
+  }, [projectId]);
+
+  // Subscribe to Snags
+  React.useEffect(() => {
+    if (!projectId) return;
+
+    // Subscribe using dataService
+    const unsubscribe = subscribeToProjectSnags(projectId, (updatedSnags) => {
+      setSnags(updatedSnags);
+    });
+
+    return () => unsubscribe();
+  }, [projectId]);
+
+  // Auto-hide toast
   React.useEffect(() => {
     if (!toast) return;
     const timer = window.setTimeout(() => setToast(null), 2000);
     return () => window.clearTimeout(timer);
   }, [toast]);
 
+  // Cleanup object URLs
+  React.useEffect(() => {
+    return () => {
+      pendingPhotoPreviews.forEach((url) => URL.revokeObjectURL(url));
+      editingSnagPhotoPreviews.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [pendingPhotoPreviews, editingSnagPhotoPreviews]);
+
+
   const handlePinPlaced = async (coord: { x: number; y: number }) => {
     if (pinTargetSnagId) {
-      const target = snags.find((snag) => snag.id === pinTargetSnagId);
-      if (!target) return;
-      const updated: SnagRecord = {
-        ...target,
-        coordinates: coord,
-        planId,
-        localStatus: "queued",
-        updatedAt: Date.now(),
-      };
-      await repos.snags.upsert(updated);
-      await enqueueSnagUpdate(target, {
-        plan_x: coord.x,
-        plan_y: coord.y,
-        plan_page: 1,
-        plan_id: planId,
-      });
-      await refreshSnags();
+      if (!projectId) return;
+      try {
+        await updateSnag(projectId, pinTargetSnagId, {
+          plan_x: coord.x,
+          plan_y: coord.y,
+          plan_page: 1,
+          plan_id: planId
+          // Note: coordinate system in SnagRecord was just {x,y}, here we map to plan_x/plan_y
+        });
+        setToast("Pin saved");
+      } catch (e) {
+        console.error(e);
+        setToast("Failed to save pin");
+      }
       setPinTargetSnagId(null);
       setPlacePinMode(false);
-      setToast("Pin saved");
       return;
     }
 
@@ -194,60 +140,109 @@ const SiteMode: React.FC = () => {
       return;
     }
     if (!projectId) return;
-    const now = Date.now();
-    const snagId = generateId();
-    const record: SnagRecord = {
-      id: snagId,
-      projectId,
-      title: draft.title?.trim() || "Untitled snag",
-      description: draft.description?.trim(),
-      assigneeId: draft.assigneeId,
-      status: "open",
-      planId,
-      coordinates: pendingCoord || undefined,
-      localStatus: "queued",
-      createdAt: now,
-      updatedAt: now,
-      metadataJson: JSON.stringify({ priority: toPriority(draft.priority) }),
-    };
 
-    const basePayload = {
-      project_id: projectId,
-      title: record.title,
-      description: record.description ?? null,
-      assigned_to: record.assigneeId ?? null,
-      status: record.status ?? "open",
-      priority: toPriority(draft.priority),
-      plan_x: record.coordinates?.x ?? null,
-      plan_y: record.coordinates?.y ?? null,
-      plan_page: 1,
-      plan_id: planId,
-    };
+    try {
+      // Create Snag
+      const newSnagId = await createSnag(projectId, {
+        title: draft.title?.trim() || "Untitled snag",
+        description: draft.description?.trim() || null,
+        priority: (draft.priority || 'medium') as SnagPriority,
+        status: 'open',
+        assigned_to: draft.assigneeId || null,
+        plan_x: pendingCoord?.x ?? null,
+        plan_y: pendingCoord?.y ?? null,
+        plan_page: 1,
+        plan_id: planId,
+        location: null,
+        category: null,
+        due_date: null,
+        created_by: user?.uid || null
+        // location, category, due_date not in quick capture
+      });
 
-    const payload = { ...basePayload, id: snagId };
+      // Upload Photos (Standard Online Upload)
+      if (pendingPhotos.length > 0) {
+        if (!navigator.onLine) {
+          setToast("Snag saved. Photos pending (Offline upload not supported yet)");
+          // In a real offline-first app we'd queue these. 
+          // For now, we just warn.
+        } else {
+          setToast("Snag saved. Uploading photos...");
+          await Promise.all(pendingPhotos.map(async (file) => {
+            try {
+              const path = `snag-photos/${projectId}/${newSnagId}/${file.name}`;
+              const url = await uploadFile(path, file);
+              await addSnagPhoto(projectId, newSnagId, {
+                snag_id: newSnagId,
+                photo_url: url,
+                caption: file.name
+              });
+            } catch (e) {
+              console.error("Photo upload failed", e);
+            }
+          }));
+          setToast("Snag and photos saved");
+        }
+      } else {
+        setToast("Snag saved");
+      }
 
-    const queueItem: SyncQueueItem = {
-      id: generateId(),
-      entity: "snag",
-      entityId: snagId,
-      action: "create",
-      payloadJson: JSON.stringify(payload),
-      status: "queued",
-      createdAt: now,
-    };
+      setPendingCoord(null);
+      setPendingPhotos([]);
+      setPendingPhotoPreviews([]);
+      setIsSheetOpen(false);
 
-    await repos.snags.upsert(record);
-    await repos.queue.enqueue(queueItem);
-    for (const photo of pendingPhotos) {
-      await queuePhoto(snagId, photo, photo.name);
+    } catch (e) {
+      console.error("Error creating snag", e);
+      setToast("Failed to save snag");
     }
-    await refreshSnags();
-    await refreshCounts();
-    await refreshQueueItems();
-    setPendingCoord(null);
-    setPendingPhotos([]);
-    setPendingPhotoPreviews([]);
-    setToast("Saved • queued");
+  };
+
+  const handleSaveEdit = async (draft: { title?: string; description?: string; priority?: "low" | "med" | "high" | "critical"; assigneeId?: string }) => {
+    if (!editingSnagId || !projectId) return;
+
+    try {
+      await updateSnag(projectId, editingSnagId, {
+        title: draft.title?.trim(),
+        description: draft.description?.trim() || null,
+        priority: (draft.priority || 'medium') as SnagPriority,
+        assigned_to: draft.assigneeId || null
+      });
+
+      // Photos for edit
+      if (editingSnagPhotos.length > 0) {
+        if (!navigator.onLine) {
+          setToast("Updated. Photos failed (Offline)");
+        } else {
+          setToast("Updated. Uploading photos...");
+          await Promise.all(editingSnagPhotos.map(async (file) => {
+            try {
+              const path = `snag-photos/${projectId}/${editingSnagId}/${file.name}`;
+              const url = await uploadFile(path, file);
+              await addSnagPhoto(projectId, editingSnagId, {
+                snag_id: editingSnagId,
+                photo_url: url,
+                caption: file.name
+              });
+            } catch (e) {
+              console.error("Photo upload failed", e);
+            }
+          }));
+          setToast("Snag updated");
+        }
+      } else {
+        setToast("Snag updated");
+      }
+
+      setEditingSnagId(null);
+      setEditingSnagPhotos([]);
+      setEditingSnagPhotoPreviews([]);
+      setIsSheetOpen(false);
+
+    } catch (e) {
+      console.error("Error updating snag", e);
+      setToast("Failed to update snag");
+    }
   };
 
   const handleVoice = async () => {
@@ -266,161 +261,92 @@ const SiteMode: React.FC = () => {
     });
   };
 
-  const handleEditSnag = (snag: SnagRecord) => {
+  const handleEditSnag = (snag: Snag) => {
     setEditingSnagId(snag.id);
     setEditingSnagPhotos([]);
     setEditingSnagPhotoPreviews([]);
     setIsSheetOpen(true);
   };
 
-  const handleSaveEdit = async (draft: { title?: string; description?: string; priority?: "low" | "med" | "high" | "critical"; assigneeId?: string }) => {
-    if (!editingSnagId) return;
-    const snag = snags.find((s) => s.id === editingSnagId);
-    if (!snag) return;
-
-    const updated: SnagRecord = {
-      ...snag,
-      title: draft.title?.trim() || snag.title,
-      description: draft.description?.trim(),
-      assigneeId: draft.assigneeId,
-      updatedAt: Date.now(),
-      metadataJson: JSON.stringify({ priority: toPriority(draft.priority) }),
-    };
-
-    const payload = {
-      title: updated.title,
-      description: updated.description ?? null,
-      assigned_to: updated.assigneeId ?? null,
-      priority: toPriority(draft.priority),
-    };
-
-    await repos.snags.upsert(updated);
-    await enqueueSnagUpdate(snag, payload);
-    for (const photo of editingSnagPhotos) {
-      await queuePhoto(editingSnagId, photo, photo.name);
-    }
-    await refreshSnags();
-    setEditingSnagId(null);
-    setEditingSnagPhotos([]);
-    setEditingSnagPhotoPreviews([]);
-    setIsSheetOpen(false);
-    setToast("Updated • queued");
-  };
-
-  const handleDeleteSnag = async (snag: SnagRecord) => {
+  const handleDeleteSnag = async (snag: Snag) => {
     if (!confirm("Delete this snag? This cannot be undone.")) return;
-
-    const updated: SnagRecord = {
-      ...snag,
-      localStatus: "queued",
-      updatedAt: Date.now(),
-    };
-
-    const queueItem: SyncQueueItem = {
-      id: generateId(),
-      entity: "snag",
-      entityId: snag.id,
-      action: "delete",
-      payloadJson: JSON.stringify({ id: snag.id }),
-      status: "queued",
-      createdAt: Date.now(),
-    };
-
-    await repos.snags.upsert(updated);
-    await repos.queue.enqueue(queueItem);
-    await refreshSnags();
-    await refreshCounts();
-    await refreshQueueItems();
-    setToast("Deleted • queued");
+    if (!projectId) return;
+    try {
+      await deleteSnag(projectId, snag.id);
+      setToast("Snag deleted");
+    } catch (e) {
+      console.error("Delete failed", e);
+      setToast("Failed to delete snag");
+    }
   };
 
-  const pins = snags
-    .filter((snag) => {
-      if (!snag.coordinates) return false;
-      if (!planId) return true;
-      return !snag.planId || snag.planId === planId;
-    })
-    .map((snag) => ({ id: snag.id, x: snag.coordinates!.x, y: snag.coordinates!.y }));
-
-  const enqueueSnagUpdate = async (snag: SnagRecord, payload: Record<string, unknown>) => {
-    const now = Date.now();
-    const queueItem: SyncQueueItem = {
-      id: generateId(),
-      entity: "snag",
-      entityId: snag.id,
-      action: "update",
-      payloadJson: JSON.stringify(payload),
-      status: "queued",
-      createdAt: now,
-    };
-    await repos.queue.enqueue(queueItem);
-    await refreshCounts();
-    await refreshQueueItems();
+  const handleStatusChange = async (snag: Snag, status: SnagStatus) => {
+    if (!projectId) return;
+    try {
+      await updateSnag(projectId, snag.id, { status });
+    } catch (e) {
+      console.error("Status update failed", e);
+      setToast("Failed to update status");
+    }
   };
 
-  const handleStatusChange = async (snag: SnagRecord, status: SnagStatus) => {
-    const updated: SnagRecord = {
-      ...snag,
-      status,
-      localStatus: "queued",
-      updatedAt: Date.now(),
-    };
-    await repos.snags.upsert(updated);
-    await enqueueSnagUpdate(snag, { status });
-    await refreshSnags();
-  };
-
+  // Bulk Utils
   const toggleSelected = (id: string) => {
     setSelectedSnags((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
-
   const clearSelection = () => setSelectedSnags(new Set());
-
   const applyBulkStatus = async (status: SnagStatus) => {
-    const targets = snags.filter((snag) => selectedSnags.has(snag.id));
+    if (!projectId) return;
+    const targets = snags.filter(s => selectedSnags.has(s.id));
     if (targets.length === 0) return;
-    for (const snag of targets) {
-      await handleStatusChange(snag, status);
-    }
+
+    // Parallel update
+    await Promise.all(targets.map(s => updateSnag(projectId, s.id, { status })));
+
     clearSelection();
     setBulkMode(false);
+    setToast("Bulk updated");
   };
 
-  const openPhotoPicker = () => {
-    fileInputRef.current?.click();
-  };
-
+  // Photo handlers
+  const openPhotoPicker = () => fileInputRef.current?.click();
   const handlePhotoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files ? Array.from(event.target.files) : [];
     if (files.length === 0) return;
-    setPendingPhotos((prev) => [...prev, ...files]);
-    setPendingPhotoPreviews((prev) => [...prev, ...files.map((file) => URL.createObjectURL(file))]);
+    if (editingSnagId) {
+      setEditingSnagPhotos(prev => [...prev, ...files]);
+      setEditingSnagPhotoPreviews(prev => [...prev, ...files.map(f => URL.createObjectURL(f))]);
+    } else {
+      setPendingPhotos(prev => [...prev, ...files]);
+      setPendingPhotoPreviews(prev => [...prev, ...files.map(f => URL.createObjectURL(f))]);
+    }
     event.target.value = "";
   };
-
   const handleRemovePhoto = (index: number) => {
-    setPendingPhotos((prev) => prev.filter((_, i) => i !== index));
-    setPendingPhotoPreviews((prev) => {
-      const next = prev.filter((_, i) => i !== index);
-      const removed = prev[index];
-      if (removed) URL.revokeObjectURL(removed);
-      return next;
-    });
+    // implementation depends on whether editing or pending
+    // Logic from original:
+    /* 
+       onRemovePhoto={(index) => {
+         if (editingSnagId) { ... } else { ... }
+       }}
+    */
+    // But removePhoto in original was doing both. The helper helperRemovePhoto only did pending.
+    // We will implement inline in QuickCaptureSheet props
   };
 
-  React.useEffect(() => {
-    return () => {
-      pendingPhotoPreviews.forEach((url) => URL.revokeObjectURL(url));
-    };
-  }, [pendingPhotoPreviews]);
+  // Pins for canvas
+  const pins = snags
+    .filter((snag) => {
+      if (snag.plan_x == null || snag.plan_y == null) return false;
+      if (!planId) return true;
+      return !snag.plan_id || snag.plan_id === planId;
+    })
+    .map((snag) => ({ id: snag.id, x: snag.plan_x!, y: snag.plan_y! }));
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
@@ -438,63 +364,13 @@ const SiteMode: React.FC = () => {
                 <div className="text-sm text-slate-400">Site Mode</div>
                 <div className="text-base font-semibold">{project?.name ?? "Project"}</div>
               </div>
-              <svg
-                className="w-4 h-4 text-slate-500 group-hover:text-blue-400 transition-colors cursor-help"
-                fill="currentColor"
-                viewBox="0 0 20 20"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </div>
-
-            <div className="absolute invisible opacity-0 group-hover:visible group-hover:opacity-100 bottom-full left-1/2 -translate-x-1/2 mb-2 transition-all duration-300 ease-in-out pointer-events-none">
-              <div className="relative px-4 py-3 text-sm text-white bg-gray-900 rounded-lg backdrop-blur-sm bg-opacity-95 border border-gray-700/50 shadow-xl whitespace-nowrap">
-                <div className="flex flex-col gap-1.5">
-                  <div className="flex items-center space-x-2 font-semibold text-blue-400">
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                    </svg>
-                    <span>How to use Site Mode</span>
-                  </div>
-                  <div className="text-xs text-slate-300 space-y-1 pl-6">
-                    <div>• Tap <span className="text-yellow-400 font-semibold">+</span> to place a pin on the plan</div>
-                    <div>• Use <span className="text-yellow-400 font-semibold">Quick snag</span> for snags without location</div>
-                    <div>• Works offline - syncs when online</div>
-                    <div>• Use bulk select to update multiple snags</div>
-                  </div>
-                </div>
-
-                <div className="absolute left-1/2 -translate-x-1/2 -bottom-1 w-2 h-2 bg-gray-900 border-r border-b border-gray-700/50 transform rotate-45" />
-              </div>
             </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setDrawerOpen(true)}
-            className={`rounded-full px-3 py-1 text-sm font-semibold ${online ? "bg-emerald-600" : "bg-amber-500"}`}
-          >
-            {online ? "Online" : "Offline"} • {pendingCount.queued + pendingCount.syncing + pendingCount.failed} pending
-          </button>
-          <button
-            onClick={() => {
-              refreshSnags();
-              refreshCounts();
-              refreshQueueItems();
-              setToast("Data reloaded");
-            }}
-            className="rounded-full bg-slate-700 px-3 py-1 text-sm font-semibold hover:bg-slate-600"
-            title="Reload local data from IndexedDB"
-          >
-            ↻
-          </button>
-          {pendingCount.failed > 0 && (
-            <div className="rounded-full bg-red-500 px-3 py-1 text-sm font-semibold">{pendingCount.failed} failed</div>
-          )}
+          <div className={`rounded-full px-3 py-1 text-sm font-semibold ${online ? "bg-emerald-600" : "bg-amber-500"}`}>
+            {online ? "Online" : "Offline / Saving locally"}
+          </div>
         </div>
       </div>
 
@@ -567,10 +443,10 @@ const SiteMode: React.FC = () => {
               {bulkMode ? "Exit bulk" : "Bulk select"}
             </button>
           </div>
-          <div className="space-y-3">
+          <div className="space-y-3 overflow-y-auto max-h-[60vh]">
             {snags.length === 0 && (
               <div className="rounded-lg border border-dashed border-slate-700 p-4 text-sm text-slate-400">
-                No local snags yet.
+                No snags yet.
               </div>
             )}
             {snags.map((snag) => (
@@ -591,23 +467,11 @@ const SiteMode: React.FC = () => {
                     <span className="rounded-full border border-slate-700 px-2 py-0.5 text-[10px] font-semibold text-slate-300">
                       {(snag.status ?? "open").replace("_", " ")}
                     </span>
-                  <span className={`rounded-full px-2 py-0.5 text-xs ${
-                    snag.localStatus === "failed"
-                      ? "bg-red-500"
-                      : snag.localStatus === "syncing"
-                        ? "bg-blue-500"
-                        : snag.localStatus === "queued"
-                          ? "bg-slate-600"
-                          : "bg-emerald-600"
-                    }`}
-                  >
-                    {snag.localStatus}
-                  </span>
                   </div>
                 </div>
                 <div className="mt-1 flex items-center justify-between text-xs text-slate-400">
-                  <span>{snag.coordinates ? "Pinned" : "Needs pin"}</span>
-                  {!snag.coordinates && (
+                  <span>{(snag.plan_x != null && snag.plan_y != null) ? "Pinned" : "Needs pin"}</span>
+                  {!(snag.plan_x != null) && (
                     <button
                       className="rounded-full border border-yellow-400 px-2 py-1 text-[10px] font-semibold text-yellow-300"
                       onClick={() => {
@@ -622,7 +486,7 @@ const SiteMode: React.FC = () => {
                 </div>
                 {!bulkMode && (
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {(snag.status ?? "open") !== "completed" && (snag.status ?? "open") !== "verified" && (
+                    {(snag.status !== "completed" && snag.status !== "verified") && (
                       <button
                         className="h-11 rounded-lg bg-emerald-500 px-3 text-xs font-bold text-slate-900"
                         onClick={() => handleStatusChange(snag, "completed")}
@@ -630,7 +494,7 @@ const SiteMode: React.FC = () => {
                         Mark Complete
                       </button>
                     )}
-                    {(snag.status ?? "open") === "completed" && (
+                    {snag.status === "completed" && (
                       <button
                         className="h-11 rounded-lg bg-sky-400 px-3 text-xs font-bold text-slate-900"
                         onClick={() => handleStatusChange(snag, "verified")}
@@ -638,7 +502,7 @@ const SiteMode: React.FC = () => {
                         Verify
                       </button>
                     )}
-                    {(snag.status ?? "open") !== "open" && (
+                    {snag.status !== "open" && (
                       <button
                         className="h-11 rounded-lg border-2 border-slate-500 px-3 text-xs font-bold text-slate-200"
                         onClick={() => handleStatusChange(snag, "open")}
@@ -669,33 +533,10 @@ const SiteMode: React.FC = () => {
       {bulkMode && (
         <div className="fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full border border-slate-700 bg-slate-900 px-4 py-2 shadow-lg">
           <span className="text-xs text-slate-300">{selectedSnags.size} selected</span>
-          <button
-            className="h-10 rounded-full bg-emerald-400 px-3 text-xs font-bold text-slate-900"
-            onClick={() => applyBulkStatus("completed")}
-          >
-            Complete
-          </button>
-          <button
-            className="h-10 rounded-full bg-sky-400 px-3 text-xs font-bold text-slate-900"
-            onClick={() => applyBulkStatus("verified")}
-          >
-            Verify
-          </button>
-          <button
-            className="h-10 rounded-full border border-slate-500 px-3 text-xs font-bold text-slate-100"
-            onClick={() => applyBulkStatus("open")}
-          >
-            Reopen
-          </button>
-          <button
-            className="h-10 rounded-full border border-slate-500 px-3 text-xs font-bold text-slate-100"
-            onClick={() => {
-              clearSelection();
-              setBulkMode(false);
-            }}
-          >
-            Done
-          </button>
+          <button className="h-10 rounded-full bg-emerald-400 px-3 text-xs font-bold text-slate-900" onClick={() => applyBulkStatus("completed")}>Complete</button>
+          <button className="h-10 rounded-full bg-sky-400 px-3 text-xs font-bold text-slate-900" onClick={() => applyBulkStatus("verified")}>Verify</button>
+          <button className="h-10 rounded-full border border-slate-500 px-3 text-xs font-bold text-slate-100" onClick={() => applyBulkStatus("open")}>Reopen</button>
+          <button className="h-10 rounded-full border border-slate-500 px-3 text-xs font-bold text-slate-100" onClick={() => { clearSelection(); setBulkMode(false); }}>Done</button>
         </div>
       )}
 
@@ -728,7 +569,13 @@ const SiteMode: React.FC = () => {
               return next;
             });
           } else {
-            handleRemovePhoto(index);
+            setPendingPhotos((prev) => prev.filter((_, i) => i !== index));
+            setPendingPhotoPreviews((prev) => {
+              const next = prev.filter((_, i) => i !== index);
+              const removed = prev[index];
+              if (removed) URL.revokeObjectURL(removed);
+              return next;
+            });
           }
         }}
       />
@@ -740,34 +587,6 @@ const SiteMode: React.FC = () => {
         multiple
         onChange={handlePhotoChange}
         style={{ display: "none" }}
-      />
-
-      <SyncDrawer
-        isOpen={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        items={queueItems}
-        counts={pendingCount}
-        onSyncNow={async () => {
-          await workerRef.current?.processQueueOnce();
-          await refreshCounts();
-          await refreshQueueItems();
-        }}
-        onRetryFailed={async () => {
-          const failed = await repos.queue.listByStatus("failed");
-          await Promise.all(
-            failed.map((item) =>
-              repos.queue.enqueue({
-                ...item,
-                id: generateId(),
-                status: "queued",
-                createdAt: Date.now(),
-              })
-            )
-          );
-          await Promise.all(failed.map((item) => repos.queue.remove(item.id)));
-          await refreshCounts();
-          await refreshQueueItems();
-        }}
       />
     </div>
   );

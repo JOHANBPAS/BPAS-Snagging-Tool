@@ -1,10 +1,8 @@
-import { User } from '@supabase/supabase-js';
+import { User, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut as firebaseSignOut, sendPasswordResetEmail } from 'firebase/auth';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { auth, db } from '../lib/firebase';
 import { Profile } from '../types';
-import { Database } from '../types/supabase';
-
-type ProfileRow = Database['public']['Tables']['profiles']['Row'];
 
 interface AuthContextType {
   user: User | null;
@@ -24,111 +22,85 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const ensureProfile = async (userId: string, userEmail?: string, userMetadata?: Record<string, any>) => {
-      const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
-
-      if (data) {
-        const profileData = data as ProfileRow;
-        setProfile({
-          id: profileData.id,
-          full_name: profileData.full_name ?? '',
-          role: (profileData.role as Profile['role']) ?? 'architect',
-          created_at: profileData.created_at ?? undefined,
-        });
-        return;
-      }
-
-      const fullName = (userMetadata?.full_name as string) || userEmail?.split('@')[0] || 'User';
-      const role = ((userMetadata?.role as Profile['role']) ?? 'architect') as Profile['role'];
-
-      const { data: inserted } = await supabase
-        .from('profiles')
-        .upsert({ id: userId, full_name: fullName, role } as Database['public']['Tables']['profiles']['Insert'])
-        .select('*')
-        .single();
-
-      if (inserted) {
-        const insertedProfile = inserted as ProfileRow;
-        setProfile({
-          id: insertedProfile.id,
-          full_name: insertedProfile.full_name ?? fullName,
-          role: (insertedProfile.role as Profile['role']) ?? role,
-          created_at: insertedProfile.created_at ?? undefined,
-        });
-      }
-    };
-
-    const init = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      const currentUser = session?.user ?? null;
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
-      if (currentUser) await ensureProfile(currentUser.id, currentUser.email ?? undefined, currentUser.user_metadata);
-      setLoading(false);
-    };
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_, session) => {
-      const nextUser = session?.user ?? null;
-      setUser(nextUser);
-      if (nextUser) {
-        ensureProfile(nextUser.id, nextUser.email ?? undefined, nextUser.user_metadata);
+      if (currentUser) {
+        try {
+          // Fetch profile from Firestore
+          const userDocRef = doc(db, 'users', currentUser.uid);
+          const userDoc = await getDoc(userDocRef);
+
+          if (userDoc.exists()) {
+            setProfile(userDoc.data() as Profile);
+          } else {
+            // Fallback if profile doesn't exist (shouldn't happen for new signups via app, but maybe for existing auth users)
+            // We can optionally create one here, similar to the original code
+            console.warn('User profile missing in Firestore');
+            setProfile(null);
+          }
+        } catch (error) {
+          console.error('Error fetching profile:', error);
+          setProfile(null);
+        }
       } else {
         setProfile(null);
       }
+      setLoading(false);
     });
 
-    init();
-
-    return () => {
-      listener.subscription.unsubscribe();
-    };
+    return () => unsubscribe();
   }, []);
 
   const signIn = async (email: string, password: string) => {
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-    if (error) throw error;
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (error) {
+      throw error;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const signUp = async (email: string, password: string, fullName: string, role: Profile['role']) => {
     setLoading(true);
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { full_name: fullName, role },
-      },
-    });
-    if (error) {
-      setLoading(false);
-      throw error;
-    }
+    try {
+      const { user: newUser } = await createUserWithEmailAndPassword(auth, email, password);
 
-    if (data.user) {
-      await supabase.from('profiles').upsert({
-        id: data.user.id,
+      // Create profile in Firestore
+      const newProfile: Profile = {
+        id: newUser.uid,
         full_name: fullName,
-        role,
-      } as Database['public']['Tables']['profiles']['Insert']);
+        role: role,
+        created_at: new Date().toISOString(), // Use ISO string to match interface
+      };
+
+      await setDoc(doc(db, 'users', newUser.uid), {
+        ...newProfile,
+        created_at: serverTimestamp(), // Use server timestamp for precision, though interface expects string
+      });
+
+      // Optimistically set profile
+      setProfile(newProfile);
+
+    } catch (error) {
+      throw error;
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const signOut = async () => {
     setLoading(true);
-    await supabase.auth.signOut();
+    await firebaseSignOut(auth);
     setLoading(false);
   };
 
   const resetPassword = async (email: string) => {
     setLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
+    await sendPasswordResetEmail(auth, email);
     setLoading(false);
-    if (error) throw error;
   };
 
   const value = useMemo(

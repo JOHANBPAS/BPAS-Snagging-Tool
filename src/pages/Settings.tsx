@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { CacheDebugger } from '../components/CacheDebugger';
+// import { CacheDebugger } from '../components/CacheDebugger';
 
 const Settings: React.FC = () => {
   const { signOut, user, profile } = useAuth();
@@ -32,10 +32,6 @@ const Settings: React.FC = () => {
         </div>
       </div>
 
-      <div className="rounded-2xl bg-white p-6 shadow-sm border border-bpas-grey/20">
-        <h2 className="text-xl font-syne font-semibold text-bpas-black mb-4">Diagnostics</h2>
-        <CacheDebugger />
-      </div>
     </div>
   );
 };

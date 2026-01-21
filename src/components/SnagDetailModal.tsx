@@ -1,9 +1,20 @@
 import React, { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabaseClient';
 import { ActivityLog, Snag, SnagComment, SnagPhoto, SnagStatus } from '../types';
 import { CommentThread } from './CommentThread';
 import { FileUpload } from './uploads/FileUpload';
 import { ImageAnnotator } from './ImageAnnotator';
+import {
+  getSnagPhotos,
+  getSnagComments,
+  addSnagComment,
+  updateSnag,
+  deleteSnagPhoto,
+  addSnagPhoto,
+  getUser,
+  uploadFile,
+  deleteFile
+} from '../services/dataService';
+import { useAuth } from '../hooks/useAuth';
 
 interface Props {
   snag: Snag;
@@ -17,6 +28,7 @@ interface Props {
 const statuses: SnagStatus[] = ['open', 'in_progress', 'completed', 'verified'];
 
 export const SnagDetailModal: React.FC<Props> = ({ snag, isOpen, onClose, onUpdate, onEdit, onDelete }) => {
+  const { user } = useAuth();
   const [photos, setPhotos] = useState<SnagPhoto[]>([]);
   const [comments, setComments] = useState<SnagComment[]>([]);
   const [activity, setActivity] = useState<ActivityLog[]>([]);
@@ -26,24 +38,29 @@ export const SnagDetailModal: React.FC<Props> = ({ snag, isOpen, onClose, onUpda
   useEffect(() => {
     const fetchDetails = async () => {
       if (!snag) return;
-      const { data: photoData } = await supabase.from('snag_photos').select('*').eq('snag_id', snag.id);
-      setPhotos(photoData || []);
-      const { data: commentData } = await supabase.from('snag_comments').select('*').eq('snag_id', snag.id);
-      setComments((commentData as SnagComment[]) || []);
-      let name = creatorName;
-      if (snag.created_by) {
-        const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', snag.created_by).single();
-        if (profile) name = profile.full_name || 'Unknown';
+      try {
+        const photoData = await getSnagPhotos(snag.project_id, snag.id);
+        setPhotos(photoData || []);
+
+        const commentData = await getSnagComments(snag.project_id, snag.id);
+        setComments(commentData || []);
+
+        let name = creatorName;
+        if (snag.created_by) {
+          try {
+            const profile = await getUser(snag.created_by);
+            if (profile) name = profile.full_name || 'Unknown';
+          } catch (e) {
+            console.warn("Failed to fetch creator profile", e);
+          }
+        }
+        setCreatorName(name);
+
+        // Activity Log - Disabled until migrated
+        setActivity([]);
+      } catch (e) {
+        console.error("Error fetching snag details", e);
       }
-      setCreatorName(name);
-      // Fetch activity log
-      const { data: activityData } = await (supabase as any)
-        .from('activity_logs')
-        .select('*')
-        .eq('entity_type', 'snag')
-        .eq('entity_id', snag.id)
-        .order('created_at', { ascending: false });
-      setActivity(activityData || []);
     };
 
     if (isOpen && snag) {
@@ -55,20 +72,17 @@ export const SnagDetailModal: React.FC<Props> = ({ snag, isOpen, onClose, onUpda
     if (!confirm('Are you sure you want to delete this photo?')) return;
 
     try {
-      // Extract path from URL
-      const url = new URL(photo.photo_url);
-      const path = url.pathname.split('/snag-photos/')[1];
-
-      if (path) {
-        const { error: storageError } = await supabase.storage.from('snag-photos').remove([decodeURIComponent(path)]);
-        if (storageError) console.error('Storage delete error:', storageError);
+      // Delete from storage if it's a firebase URL
+      if (photo.photo_url) {
+        try {
+          await deleteFile(photo.photo_url);
+        } catch (e) {
+          console.warn("Storage delete failed (might be already gone)", e);
+        }
       }
 
-      // If it has an ID, delete from DB
-      if (photo.id && !photo.id.startsWith('http')) {
-        const { error: dbError } = await supabase.from('snag_photos').delete().eq('id', photo.id);
-        if (dbError) throw dbError;
-      }
+      // Delete from Firestore
+      await deleteSnagPhoto(snag.project_id, snag.id, photo.id);
 
       setPhotos((prev) => prev.filter((p) => p.photo_url !== photo.photo_url));
     } catch (error) {
@@ -171,7 +185,7 @@ export const SnagDetailModal: React.FC<Props> = ({ snag, isOpen, onClose, onUpda
                       value={snag.status}
                       onChange={async (e) => {
                         const status = e.target.value as SnagStatus;
-                        await supabase.from('snags').update({ status }).eq('id', snag.id);
+                        await updateSnag(snag.project_id, snag.id, { status });
                         onUpdate();
                       }}
                       className="w-full rounded-lg border-slate-200 text-sm focus:border-bpas-black focus:ring-bpas-black"
@@ -216,21 +230,19 @@ export const SnagDetailModal: React.FC<Props> = ({ snag, isOpen, onClose, onUpda
                       bucket="snag-photos"
                       onUploaded={async (pathOrPaths) => {
                         const paths = Array.isArray(pathOrPaths) ? pathOrPaths : [pathOrPaths];
-                        const newPhotos = paths.map(path => ({
-                          snag_id: snag.id,
-                          photo_url: path
-                        }));
 
-                        await supabase.from('snag_photos').insert(newPhotos);
+                        const newPhotos: SnagPhoto[] = [];
+                        for (const path of paths) {
+                          // path here is actually photo_url from FileUpload (which uses uploadFile)
+                          const saved = await addSnagPhoto(snag.project_id, snag.id, {
+                            photo_url: path,
+                            snag_id: snag.id
+                          });
+                          // @ts-ignore
+                          newPhotos.push({ ...saved, id: saved.id || path });
+                        }
 
-                        setPhotos((prev) => [
-                          ...prev,
-                          ...newPhotos.map(p => ({
-                            id: p.photo_url, // Temporary ID for UI
-                            snag_id: p.snag_id,
-                            photo_url: p.photo_url
-                          }))
-                        ]);
+                        setPhotos((prev) => [...prev, ...newPhotos]);
                       }}
                       className="h-full w-full"
                     />
@@ -247,12 +259,12 @@ export const SnagDetailModal: React.FC<Props> = ({ snag, isOpen, onClose, onUpda
                   snagId={snag.id}
                   comments={comments}
                   onAdd={async (text) => {
-                    const { data, error } = await supabase.from('snag_comments').insert({
+                    const newComment = await addSnagComment(snag.project_id, snag.id, {
                       snag_id: snag.id,
-                      author_id: snag.created_by || '', // Use authenticated user ID
+                      author_id: user?.uid || 'anon',
                       comment: text,
-                    }).select('*').single();
-                    if (!error && data) setComments((prev) => [...prev, data as SnagComment]);
+                    });
+                    setComments((prev) => [...prev, newComment as SnagComment]);
                   }}
                 />
               </div>
@@ -269,6 +281,9 @@ export const SnagDetailModal: React.FC<Props> = ({ snag, isOpen, onClose, onUpda
                       </div>
                     </li>
                   ))}
+                  {activity.length === 0 && (
+                    <li className="text-xs text-slate-400 italic">No activity recorded.</li>
+                  )}
                 </ul>
               </div>
             </div>
@@ -281,41 +296,31 @@ export const SnagDetailModal: React.FC<Props> = ({ snag, isOpen, onClose, onUpda
           imageSrc={annotatingUrl}
           onCancel={() => setAnnotatingUrl(null)}
           onSave={async (file) => {
-            // Upload annotated image as new photo
-            const bucket = supabase.storage.from('snag-photos');
-            const ext = 'jpg';
-            const path = `${snag.id}/${Date.now()}-annotated.${ext}`;
+            try {
+              // Upload annotated image
+              const ext = 'jpg';
+              const path = `snag-photos/${snag.project_id}/${snag.id}/${Date.now()}-annotated.${ext}`;
+              const publicUrl = await uploadFile(path, file);
 
-            const { error: uploadError } = await bucket.upload(path, file, {
-              contentType: 'image/jpeg',
-              cacheControl: '3600',
-              upsert: false
-            });
-
-            if (!uploadError) {
-              const { data: urlData } = bucket.getPublicUrl(path);
-              const publicUrl = urlData.publicUrl;
-
-              // Delete the original photo record to avoid duplicates in report
-              // We find the photo by URL since we only have the URL in state for some cases, 
-              // but ideally we should match by ID. For now, URL matching is safe enough if unique.
-              const originalPhoto = photos.find(p => p.photo_url === annotatingUrl);
-              if (originalPhoto && originalPhoto.id) {
-                await supabase.from('snag_photos').delete().eq('id', originalPhoto.id);
-              }
-
-              await supabase.from('snag_photos').insert({
-                snag_id: snag.id,
-                photo_url: publicUrl
+              // Add new photo doc
+              const saved = await addSnagPhoto(snag.project_id, snag.id, {
+                photo_url: publicUrl,
+                snag_id: snag.id
               });
 
-              // Update local state: remove original, add new
-              setPhotos(prev => [
-                ...prev.filter(p => p.photo_url !== annotatingUrl),
-                { id: publicUrl, snag_id: snag.id, photo_url: publicUrl } // Temp ID
-              ]);
+              // Delete original?
+              // Logic: find original photo by iterating photos state matching URL
+              const originalPhoto = photos.find(p => p.photo_url === annotatingUrl);
+              if (originalPhoto) {
+                await deletePhoto(originalPhoto); // This deletes storage + doc
+              }
+
+              // Add to state
+              setPhotos(prev => [...prev, saved as SnagPhoto]);
+              setAnnotatingUrl(null);
+            } catch (e) {
+              console.error("Error saving annotation", e);
             }
-            setAnnotatingUrl(null);
           }}
         />
       )}

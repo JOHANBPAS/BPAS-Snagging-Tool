@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { supabase } from '../lib/supabaseClient';
 import { Project, Snag } from '../types';
 import { saveAs } from 'file-saver';
 import { generateReport, generateWordReport } from '../services/reportGenerator';
-import { Database } from '../types/supabase';
+import { uploadFile, addReport } from '../services/dataService';
+import { useAuth } from '../hooks/useAuth';
 
 interface Props {
   project: Project;
@@ -11,13 +11,13 @@ interface Props {
 }
 
 export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [publicUrl, setPublicUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<string>('');
 
   const handleGenerateReport = async () => {
-    // ... existing logic
     setLoading(true);
     setError(null);
     setProgress('Initializing report...');
@@ -29,32 +29,32 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
         onProgress: setProgress,
       });
 
-      const { error: uploadError } = await supabase.storage.from('reports').upload(fileName, pdf, {
-        contentType: 'application/pdf',
-        upsert: true,
-      });
+      // Upload to Firebase Storage
+      // Path: reports/fileName.pdf
+      // Using generic uploadFile which returns public URL.
+      // But uploadFile currently assumes generic 'files' bucket? 
+      // Update: dataService uploadFile takes (path, file). Ref step 141.
+      // And it uploads to default bucket.
+      // report paths: 'reports/filename.pdf'
+      const path = `reports/${fileName}`;
+      const url = await uploadFile(path, pdf);
 
-      if (uploadError) throw uploadError;
-
-      const { data } = supabase.storage.from('reports').getPublicUrl(fileName);
-      const { data: userData } = await supabase.auth.getUser();
-
-      if (project.id && data?.publicUrl) {
-        await supabase.from('project_reports').insert({
+      if (project.id && url) {
+        await addReport({
           project_id: project.id,
           file_name: fileName,
-          file_url: data.publicUrl,
+          file_url: url,
           generated_at: new Date().toISOString(),
-          generated_by: userData.user?.id || null,
-        } as Database['public']['Tables']['project_reports']['Insert']);
+          generated_by: user?.uid || null,
+        });
 
         window.dispatchEvent(
           new CustomEvent('report:created', {
-            detail: { project_id: project.id, file_name: fileName, file_url: data.publicUrl },
+            detail: { project_id: project.id, file_name: fileName, file_url: url },
           }),
         );
       }
-      setPublicUrl(data.publicUrl);
+      setPublicUrl(url);
     } catch (err: any) {
       console.warn('Upload failed, falling back to direct download:', err);
       setError('Report generation or upload failed. Please try again.');

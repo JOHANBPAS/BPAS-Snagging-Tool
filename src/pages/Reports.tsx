@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { getReports, deleteReport, getProjects } from '../services/dataService';
 import { Project } from '../types';
 
 interface ReportRow {
@@ -15,8 +15,12 @@ const Reports: React.FC = () => {
   const [projects, setProjects] = useState<Record<string, Project>>({});
 
   const loadReports = async () => {
-    const { data } = await supabase.from('project_reports').select('*').order('generated_at', { ascending: false });
-    setReports((data as ReportRow[]) || []);
+    try {
+      const data = await getReports();
+      setReports(data as ReportRow[]);
+    } catch (e) {
+      console.error("Failed to load reports", e);
+    }
   };
 
   useEffect(() => {
@@ -30,33 +34,25 @@ const Reports: React.FC = () => {
 
   useEffect(() => {
     const fetchProjects = async () => {
-      const { data } = await supabase.from('projects').select('*');
-      const map: Record<string, Project> = {};
-      (data as Project[] | null)?.forEach((p) => {
-        map[p.id] = p;
-      });
-      setProjects(map);
+      try {
+        const data = await getProjects();
+        const map: Record<string, Project> = {};
+        data.forEach((p) => {
+          map[p.id] = p;
+        });
+        setProjects(map);
+      } catch (e) {
+        console.error("Failed to load projects", e);
+      }
     };
     fetchProjects();
   }, []);
 
-  const deleteReport = async (report: ReportRow) => {
+  const handleDelete = async (report: ReportRow) => {
     if (!confirm('Are you sure you want to delete this report?')) return;
 
     try {
-      // Extract path from URL. URL format: .../reports/filename.pdf
-      // The bucket is 'reports'
-      const url = new URL(report.file_url);
-      const path = url.pathname.split('/reports/')[1];
-
-      if (path) {
-        const { error: storageError } = await supabase.storage.from('reports').remove([decodeURIComponent(path)]);
-        if (storageError) console.error('Storage delete error:', storageError);
-      }
-
-      const { error: dbError } = await supabase.from('project_reports').delete().eq('id', report.id);
-      if (dbError) throw dbError;
-
+      await deleteReport(report.id, report.file_url);
       setReports((prev) => prev.filter((r) => r.id !== report.id));
     } catch (error) {
       console.error('Error deleting report:', error);
@@ -107,7 +103,7 @@ const Reports: React.FC = () => {
                     <button
                       type="button"
                       className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1 text-xs text-rose-600 hover:bg-rose-100"
-                      onClick={() => deleteReport(report)}
+                      onClick={() => handleDelete(report)}
                     >
                       Delete
                     </button>
@@ -153,7 +149,7 @@ const Reports: React.FC = () => {
                 <button
                   type="button"
                   className="flex-1 rounded-lg border border-rose-200 bg-rose-50 py-2 text-xs text-rose-600 hover:bg-rose-100"
-                  onClick={() => deleteReport(report)}
+                  onClick={() => handleDelete(report)}
                 >
                   Delete
                 </button>

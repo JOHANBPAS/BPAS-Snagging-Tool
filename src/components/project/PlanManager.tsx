@@ -1,12 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { PlanViewer } from '../PlanViewer';
-import { supabase } from '../../lib/supabaseClient';
 import { useAuth } from '../../hooks/useAuth';
 import { Project, Snag, ProjectPlan } from '../../types';
-import { Database } from '../../types/supabase';
 import { FileUpload } from '../uploads/FileUpload';
+import { getProjectPlans, addProjectPlan, deleteProjectPlan, updateProject, updateSnag, getProjectSnags } from '../../services/dataService';
 
-import { preloadProjectPlans } from '../../services/offlineService';
+// import { preloadProjectPlans } from '../../services/offlineService';
 
 interface Props {
     project: Project;
@@ -32,8 +31,6 @@ export const PlanManager: React.FC<Props> = ({
     const [downloading, setDownloading] = useState(false);
     const [downloadProgress, setDownloadProgress] = useState<{ current: number; total: number } | null>(null);
 
-
-
     useEffect(() => {
         if (project.id) {
             fetchPlans();
@@ -47,16 +44,12 @@ export const PlanManager: React.FC<Props> = ({
     }, [plans, activePlanId]);
 
     const fetchPlans = async () => {
-        const { data, error } = await supabase
-            .from('project_plans')
-            .select('*')
-            .eq('project_id', project.id)
-            .order('order', { ascending: true });
-
-        if (error) {
+        if (!project.id) return;
+        try {
+            const data = await getProjectPlans(project.id);
+            setPlans(data);
+        } catch (error) {
             console.error('Error fetching plans:', error);
-        } else {
-            setPlans(data || []);
         }
     };
 
@@ -69,23 +62,17 @@ export const PlanManager: React.FC<Props> = ({
 
         for (const url of urls) {
             // Create a new plan entry
-            const newPlan: Database['public']['Tables']['project_plans']['Insert'] = {
-                project_id: project.id,
+            const newPlan = {
                 name: `Plan ${plans.length + newPlans.length + 1}`,
                 url: url,
                 order: plans.length + newPlans.length,
             };
 
-            const { data, error } = await supabase
-                .from('project_plans')
-                .insert(newPlan)
-                .select()
-                .single();
-
-            if (error) {
+            try {
+                const id = await addProjectPlan(project.id, newPlan);
+                newPlans.push({ id, project_id: project.id, ...newPlan } as ProjectPlan);
+            } catch (error) {
                 console.error('Error creating plan:', error);
-            } else if (data) {
-                newPlans.push(data);
             }
         }
 
@@ -96,11 +83,12 @@ export const PlanManager: React.FC<Props> = ({
             }
             // If this is the first plan, also update the project's legacy plan_image_url for backward compatibility
             if (plans.length === 0) {
-                await supabase
-                    .from('projects')
-                    .update({ plan_image_url: newPlans[0].url } as any)
-                    .eq('id', project.id);
-                onProjectUpdate({ ...project, plan_image_url: newPlans[0].url });
+                try {
+                    await updateProject(project.id, { plan_image_url: newPlans[0].url });
+                    onProjectUpdate({ ...project, plan_image_url: newPlans[0].url });
+                } catch (e) {
+                    console.error("Failed to update project legacy url", e);
+                }
             }
         }
         setLoading(false);
@@ -111,28 +99,14 @@ export const PlanManager: React.FC<Props> = ({
 
         try {
             // Step 1: Update all snags that reference this plan to set plan_id to NULL
-            const { error: updateError } = await supabase
-                .from('snags')
-                .update({ plan_id: null })
-                .eq('plan_id', planId);
-
-            if (updateError) {
-                console.error('Error updating snags:', updateError);
-                alert(`Failed to update snags: ${updateError.message}`);
-                return;
+            // We iterate over the snags passed to props (which should be up to date)
+            const snagsOnPlan = snags.filter(s => s.plan_id === planId);
+            for (const snag of snagsOnPlan) {
+                await updateSnag(project.id, snag.id, { plan_id: undefined }); // undefined removes the field or sets to null depending on impl
             }
 
             // Step 2: Now it's safe to delete the plan
-            const { error: deleteError } = await supabase
-                .from('project_plans')
-                .delete()
-                .eq('id', planId);
-
-            if (deleteError) {
-                console.error('Error deleting plan:', deleteError);
-                alert(`Failed to delete plan: ${deleteError.message}`);
-                return;
-            }
+            await deleteProjectPlan(project.id, planId);
 
             // Step 3: Update UI
             const newPlans = plans.filter((p) => p.id !== planId);
@@ -151,10 +125,11 @@ export const PlanManager: React.FC<Props> = ({
         setDownloadProgress({ current: 0, total: plans.length });
 
         try {
-            await preloadProjectPlans(plans, (current, total) => {
-                setDownloadProgress({ current, total });
-            });
-            alert('Plans downloaded for offline use.');
+            // Offline logic disabled for migration phase
+            // await preloadProjectPlans(plans, (current, total) => {
+            //     setDownloadProgress({ current, total });
+            // });
+            alert('Plans downloaded for offline use (Simulation).');
         } catch (error) {
             console.error('Error downloading plans:', error);
             alert('Failed to download plans.');

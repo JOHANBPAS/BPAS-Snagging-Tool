@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ReportPreview } from '../components/ReportPreview';
-import { supabase } from '../lib/supabaseClient';
 import { ChecklistField, Project, Snag } from '../types';
 import { ProjectHeader } from '../components/project/ProjectHeader';
 import { PlanManager } from '../components/project/PlanManager';
@@ -9,7 +8,7 @@ import { SnagManager } from '../components/project/SnagManager';
 import { EditProjectModal } from '../components/project/EditProjectModal';
 import { DeleteProjectModal } from '../components/project/DeleteProjectModal';
 import { useAuth } from '../hooks/useAuth';
-import { useSyncEffect } from '../hooks/useSyncEffect';
+import { getProject, getProjectSnags, getChecklistFields, getUsers } from '../services/dataService';
 
 export const ProjectDetail: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>();
@@ -29,10 +28,10 @@ export const ProjectDetail: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const fetchProject = async () => {
+    if (!projectId) return;
     try {
-      const { data, error } = await supabase.from('projects').select('*').eq('id', projectId).single();
-      if (error) throw error;
-      setProject((data as Project) || null);
+      const data = await getProject(projectId);
+      setProject(data);
     } catch (err: any) {
       console.error('Error fetching project:', err);
       setError(err.message || 'Failed to load project');
@@ -43,21 +42,18 @@ export const ProjectDetail: React.FC = () => {
 
   const fetchSnags = async () => {
     if (!projectId) return;
-    const { data } = await supabase
-      .from('snags')
-      .select('*')
-      .eq('project_id', projectId)
-      .order('created_at', { ascending: true }); // Ensure stable order
-
-    //Filter out any snags with offline IDs (these are temporary and should be replaced by real ones)
-    const realSnags = (data as Snag[] || []).filter(s => !s.id.startsWith('offline-'));
-
-    const snagsWithId = realSnags.map((s, index) => ({
-      ...s,
-      friendly_id: index + 1
-    }));
-
-    setSnags(snagsWithId);
+    try {
+      const snagsData = await getProjectSnags(projectId);
+      // Add friendly_id if missing (or we rely on dataService to invoke it?)
+      // The original code did index + 1 mapping on fetch. We can keep doing that.
+      const snagsWithId = snagsData.map((s, index) => ({
+        ...s,
+        friendly_id: index + 1
+      }));
+      setSnags(snagsWithId);
+    } catch (err) {
+      console.error("Error fetching snags", err);
+    }
   };
 
   useEffect(() => {
@@ -65,30 +61,29 @@ export const ProjectDetail: React.FC = () => {
     fetchSnags();
   }, [projectId]);
 
-  // Auto-sync and refresh when coming back online
-  useSyncEffect(() => {
-    console.log('Syncing complete, refreshing snags...');
-    fetchSnags();
-  });
-
   const [contractors, setContractors] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchTemplate = async () => {
       if (!project?.checklist_template_id) return;
-      const { data } = await supabase
-        .from('checklist_template_fields')
-        .select('*')
-        .eq('template_id', project.checklist_template_id);
-      setChecklistFields((data as ChecklistField[]) || []);
+      try {
+        const fields = await getChecklistFields(project.checklist_template_id);
+        setChecklistFields(fields as ChecklistField[]);
+      } catch (err) {
+        console.error("Error fetching template fields", err);
+      }
     };
     fetchTemplate();
   }, [project?.checklist_template_id]);
 
   useEffect(() => {
     const fetchProfiles = async () => {
-      const { data } = await supabase.from('profiles').select('*');
-      setContractors(data || []);
+      try {
+        const users = await getUsers();
+        setContractors(users);
+      } catch (err) {
+        console.error("Error fetching users", err);
+      }
     };
     fetchProfiles();
   }, []);

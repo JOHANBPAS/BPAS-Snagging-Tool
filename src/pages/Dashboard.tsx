@@ -2,10 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { StatsCards } from '../components/StatsCards';
-import { supabase } from '../lib/supabaseClient';
+import { getProjects, getAllSnags } from '../services/dataService'; // Use dataService
 import { DashboardStats, Project, Snag } from '../types';
 
-import { OfflineSyncModal } from '../components/OfflineSyncModal';
+// import { OfflineSyncModal } from '../components/OfflineSyncModal'; // Temporarily disabled
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -16,14 +16,14 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      const { data: projectData, error: projectError } = await supabase.from('projects').select('*');
-      const { data: snagData, error: snagError } = await supabase.from('snags').select('*');
-
-      if (projectError) console.error('Error fetching projects:', projectError);
-      if (snagError) console.error('Error fetching snags:', snagError);
-
-      setProjects((projectData as Project[]) || []);
-      setSnags((snagData as Snag[]) || []);
+      try {
+        const projectData = await getProjects();
+        const snagData = await getAllSnags();
+        setProjects(projectData);
+        setSnags(snagData);
+      } catch (e) {
+        console.error("Error fetching dashboard data", e);
+      }
     };
     fetchData();
   }, []);
@@ -66,6 +66,7 @@ const Dashboard: React.FC = () => {
         </p>
         <div className="mt-4 flex items-center justify-between">
           <div className="h-1 w-14 rounded-full bg-bpas-yellow" />
+          {/* 
           <button
             onClick={() => setIsSyncModalOpen(true)}
             className="flex items-center gap-2 rounded-lg bg-white/10 px-4 py-2 text-sm font-medium text-white backdrop-blur-sm hover:bg-white/20 transition"
@@ -77,6 +78,7 @@ const Dashboard: React.FC = () => {
             </svg>
             Download for Offline
           </button>
+           */}
         </div>
       </div>
 
@@ -140,11 +142,11 @@ const Dashboard: React.FC = () => {
       </div>
 
 
-      <OfflineSyncModal
+      {/* <OfflineSyncModal
         isOpen={isSyncModalOpen}
         onClose={() => setIsSyncModalOpen(false)}
         projects={projects}
-      />
+      /> */}
     </div >
   );
 };
