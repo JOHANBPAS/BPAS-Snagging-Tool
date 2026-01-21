@@ -44,13 +44,13 @@ const Reports: React.FC = () => {
     if (!confirm('Are you sure you want to delete this report?')) return;
 
     try {
-      // Extract path from URL. URL format: .../project-reports/filename.pdf
-      // We assume the bucket is 'project-reports'
+      // Extract path from URL. URL format: .../reports/filename.pdf
+      // The bucket is 'reports'
       const url = new URL(report.file_url);
-      const path = url.pathname.split('/project-reports/')[1];
+      const path = url.pathname.split('/reports/')[1];
 
       if (path) {
-        const { error: storageError } = await supabase.storage.from('project-reports').remove([decodeURIComponent(path)]);
+        const { error: storageError } = await supabase.storage.from('reports').remove([decodeURIComponent(path)]);
         if (storageError) console.error('Storage delete error:', storageError);
       }
 
