@@ -77,11 +77,13 @@ const Projects: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <div className="card flex flex-col gap-3 bg-white/90 p-4 md:flex-row md:items-end">
-        <div className="flex-1 space-y-2">
-          <p className="text-xs uppercase tracking-wide text-bpas-grey font-syne">Projects</p>
-          <h3 className="text-xl font-syne font-semibold text-bpas-black">Create new project</h3>
-          <span className="section-accent" />
+      <div className="card bg-white/90 p-4">
+        <div className="space-y-3">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-bpas-grey font-syne">Projects</p>
+            <h3 className="text-xl font-syne font-semibold text-bpas-black">Create new project</h3>
+            <span className="section-accent" />
+          </div>
           <form onSubmit={handleCreate} className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
             <input
               value={form.name || ''}
