@@ -84,6 +84,21 @@ export const getAllSnags = async (): Promise<Snag[]> => {
 
 // --- Projects ---
 
+// --- Helper to remove undefined values for Firestore ---
+const sanitizeData = (data: any) => {
+    if (!data || typeof data !== 'object') return data;
+    const sanitized: any = {};
+    Object.keys(data).forEach(key => {
+        const value = data[key];
+        if (value !== undefined) {
+            sanitized[key] = value === undefined ? null : value;
+        }
+    });
+    return sanitized;
+};
+
+// --- Projects ---
+
 export const getProjects = async (): Promise<Project[]> => {
     const q = query(projectsCol, orderBy('created_at', 'desc'));
     const snapshot = await getDocs(q);
@@ -105,7 +120,7 @@ export const createProject = async (project: Omit<Project, 'id' | 'created_at'>)
     if (!user) throw new Error('User must be logged in');
 
     const docRef = await addDoc(projectsCol, {
-        ...project,
+        ...sanitizeData(project),
         created_by: user.uid,
         created_at: serverTimestamp(),
         status: 'active'
@@ -115,10 +130,7 @@ export const createProject = async (project: Omit<Project, 'id' | 'created_at'>)
 
 export const updateProject = async (id: string, data: Partial<Project>) => {
     const docRef = doc(db, 'projects', id);
-    await updateDoc(docRef, {
-        ...data,
-        // Don't update created_at usually
-    });
+    await updateDoc(docRef, sanitizeData(data));
 };
 
 export const deleteFolder = async (path: string): Promise<void> => {
@@ -186,7 +198,7 @@ export const getProjectPlans = async (projectId: string): Promise<ProjectPlan[]>
 export const addProjectPlan = async (projectId: string, plan: Omit<ProjectPlan, 'id' | 'project_id' | 'created_at'>) => {
     const plansCol = collection(db, 'projects', projectId, 'plans');
     const docRef = await addDoc(plansCol, {
-        ...plan,
+        ...sanitizeData(plan),
         project_id: projectId,
         created_at: serverTimestamp()
     });
@@ -226,7 +238,7 @@ export const deleteReport = async (reportId: string, fileUrl?: string) => {
 export const addReport = async (report: any) => {
     const reportsCol = collection(db, 'project_reports');
     const docRef = await addDoc(reportsCol, {
-        ...report,
+        ...sanitizeData(report),
         generated_at: serverTimestamp() // or user provided string? The UI expects ISO string. 
         // If I use serverTimestamp(), I lose the exact client time if needed, but it's generated now.
         // Actually, ReportPreview sets generated_at to new Date().toISOString().
@@ -275,7 +287,7 @@ export const createSnag = async (projectId: string, snag: Omit<Snag, 'id' | 'pro
     // For now, simpler implementation.
 
     const docRef = await addDoc(snagsCol, {
-        ...snag,
+        ...sanitizeData(snag),
         project_id: projectId,
         created_by: user.uid,
         created_at: serverTimestamp(),
@@ -286,18 +298,9 @@ export const createSnag = async (projectId: string, snag: Omit<Snag, 'id' | 'pro
 
 export const updateSnag = async (projectId: string, snagId: string, data: Partial<Snag>) => {
     const docRef = doc(db, 'projects', projectId, 'snags', snagId);
-
-    // Sanitize: remove undefined values as they cause Firebase updateDoc to fail
-    const sanitized: any = {};
-    Object.keys(data).forEach(key => {
-        const val = (data as any)[key];
-        if (val !== undefined) {
-            sanitized[key] = val;
-        }
-    });
-
-    await updateDoc(docRef, sanitized);
+    await updateDoc(docRef, sanitizeData(data));
 };
+
 
 export const deleteSnag = async (projectId: string, snagId: string) => {
     const docRef = doc(db, 'projects', projectId, 'snags', snagId);
@@ -319,7 +322,7 @@ export const getSnagPhotos = async (projectId: string, snagId: string): Promise<
 export const addSnagPhoto = async (projectId: string, snagId: string, photo: Omit<SnagPhoto, 'id' | 'created_at'>) => {
     const photosCol = collection(db, 'projects', projectId, 'snags', snagId, 'photos');
     const docRef = await addDoc(photosCol, {
-        ...photo,
+        ...sanitizeData(photo),
         created_at: serverTimestamp()
     });
     return docRef.id;
@@ -346,7 +349,7 @@ export const getSnagComments = async (projectId: string, snagId: string): Promis
 export const addSnagComment = async (projectId: string, snagId: string, comment: Omit<SnagComment, 'id' | 'created_at'>) => {
     const commentsCol = collection(db, 'projects', projectId, 'snags', snagId, 'comments');
     const docRef = await addDoc(commentsCol, {
-        ...comment,
+        ...sanitizeData(comment),
         created_at: serverTimestamp()
     });
     return { id: docRef.id, ...comment, created_at: new Date().toISOString() }; // Return optimistic result
