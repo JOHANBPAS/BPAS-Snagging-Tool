@@ -18,6 +18,7 @@ export interface Project {
   status?: 'active' | 'completed' | 'archived';
   plan_image_url?: string | null;
   created_by?: string;
+  creator?: { full_name: string } | null;
   checklist_template_id?: string | null;
   created_at?: string;
   inspection_type?: string | null;

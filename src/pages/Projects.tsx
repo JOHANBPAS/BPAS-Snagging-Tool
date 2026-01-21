@@ -15,7 +15,10 @@ const Projects: React.FC = () => {
 
   const fetchProjects = async () => {
     try {
-      const { data: projectsData, error } = await supabase.from('projects').select('*').order('created_at', { ascending: false });
+      const { data: projectsData, error } = await supabase
+        .from('projects')
+        .select('*, creator:profiles!created_by(full_name)')
+        .order('created_at', { ascending: false });
       if (error) throw error;
       setProjects((projectsData as Project[]) || []);
     } catch (err: any) {

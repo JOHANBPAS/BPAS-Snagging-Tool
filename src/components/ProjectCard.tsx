@@ -43,6 +43,11 @@ export const ProjectCard: React.FC<Props> = ({ project, openSnagCount = 0 }) => 
               {project.start_date || 'TBD'} — {project.end_date || 'TBD'}
             </p>
           </div>
+          {project.creator?.full_name && (
+            <div className="mt-2 text-xs text-slate-500">
+              Created by: <span className="font-medium text-slate-700">{project.creator.full_name}</span>
+            </div>
+          )}
         </Link>
 
         {/* Delete button - only visible for archived projects */}
