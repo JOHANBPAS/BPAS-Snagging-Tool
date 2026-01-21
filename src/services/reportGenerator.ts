@@ -12,6 +12,9 @@ export interface ReportGenerationOptions {
 }
 
 const toDataUrl = async (path: string) => {
+    if (!path) return null;
+    if (path.startsWith('data:')) return path;
+
     try {
         let url: URL;
         if (path.startsWith('http')) {
@@ -20,10 +23,20 @@ const toDataUrl = async (path: string) => {
             url = new URL(path, window.location.origin);
         }
 
-        url.searchParams.append('report', 'true');
+        // Cache busting only for non-base64 URLs
         url.searchParams.append('t', Date.now().toString());
-        const res = await fetch(url.toString(), { mode: 'cors', credentials: 'omit', cache: 'no-store' });
-        if (!res.ok) return null;
+
+        const res = await fetch(url.toString(), {
+            mode: 'cors',
+            credentials: 'omit',
+            cache: 'no-store'
+        });
+
+        if (!res.ok) {
+            console.warn(`Report: Failed to fetch image ${path}: ${res.status} ${res.statusText}`);
+            return null;
+        }
+
         const blob = await res.blob();
         return await new Promise<string>((resolve) => {
             const reader = new FileReader();
@@ -31,6 +44,7 @@ const toDataUrl = async (path: string) => {
             reader.readAsDataURL(blob);
         });
     } catch (e) {
+        console.warn(`Report: Error converting image to data URL ${path}`, e);
         return null;
     }
 };
@@ -102,7 +116,9 @@ const getFloorPlans = async (project: Project, snags: Snag[], onProgress?: (mess
 
             if (plan.url.toLowerCase().endsWith('.pdf')) {
                 try {
-                    const pdfJS = await import('pdfjs-dist');
+                    // Properly handle potential ESM/CJS differences in dynamic import
+                    const pdfjsModule = await import('pdfjs-dist');
+                    const pdfJS = pdfjsModule.default || pdfjsModule;
 
                     // Use CDN for worker to avoid local build issues
                     if (!pdfJS.GlobalWorkerOptions.workerSrc) {
@@ -240,10 +256,17 @@ const createLocationSnippet = async (
             const ctx = canvas.getContext('2d');
             if (!ctx) return resolve(null);
 
-            // Calculate crop coordinates
+            // Calculate crop coordinates with clamping to avoid drawing outside image bounds
             // x and y are 0-1 percentages
-            const cropX = x * img.width - snippetSize / 2;
-            const cropY = y * img.height - snippetSize / 2;
+            const absoluteX = x * img.width;
+            const absoluteY = y * img.height;
+
+            let cropX = absoluteX - snippetSize / 2;
+            let cropY = absoluteY - snippetSize / 2;
+
+            // Clamp crop coordinates
+            cropX = Math.max(0, Math.min(cropX, img.width - snippetSize));
+            cropY = Math.max(0, Math.min(cropY, img.height - snippetSize));
 
             // Draw the cropped area
             ctx.drawImage(img, cropX, cropY, snippetSize, snippetSize, 0, 0, snippetSize, snippetSize);
@@ -759,7 +782,7 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
 
         // Helper: Render description with text wrapping and max height constraint
         const renderDescription = (description: string | null | undefined): number => {
-            if (!description) return 0;
+            if (!description || description.trim() === '') return 0;
 
             const descriptionLines = doc.splitTextToSize(description, pageWidth - margin * 2 - 20);
             const maxDescriptionLines = 50;
@@ -773,24 +796,24 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
             doc.text('Description:', margin, currentY);
 
             // Description text
-            currentY += 10;
+            const textY = currentY + 10;
             doc.setFont('helvetica', 'normal');
             doc.setTextColor(brandColors.black);
-            doc.text(limitedLines, margin, currentY);
+            doc.text(limitedLines, margin, textY);
 
             let consumedHeight = 10 + limitedLines.length * 10;
 
             if (isTruncated) {
-                currentY += limitedLines.length * 10 + 5;
+                const truncateY = textY + limitedLines.length * 10 + 5;
                 doc.setTextColor(150, 155, 160);
                 doc.setFont('helvetica', 'italic');
-                doc.text('(Description truncated - see full details in system)', margin + 10, currentY);
+                doc.text('(Description truncated - see full details in system)', margin + 10, truncateY);
                 consumedHeight += 15;
             } else {
-                consumedHeight += 10;
+                consumedHeight += 5;
             }
 
-            return consumedHeight + 10; // padding to avoid overlap with following blocks
+            return consumedHeight + 5; // padding to avoid overlap with following blocks
         };
 
         // Helper: Render images in grid layout (2 per row)
@@ -819,7 +842,16 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
                 doc.setDrawColor(200, 210, 220);
                 doc.setLineWidth(0.5);
                 doc.rect(imgX, imgY, imgWidth, imgHeight);
-                doc.addImage(imageItems[imgIdx].src, 'JPEG', imgX, imgY, imgWidth, imgHeight);
+                try {
+                    // Determine format from data URL if possible, default to JPEG
+                    const format = imageItems[imgIdx].src.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+                    doc.addImage(imageItems[imgIdx].src, format, imgX, imgY, imgWidth, imgHeight);
+                } catch (err) {
+                    console.warn('Failed to add image to PDF', err);
+                    doc.setFontSize(7);
+                    doc.setTextColor(150, 150, 150);
+                    doc.text('Image failed to load', imgX + 5, imgY + imgHeight / 2);
+                }
             }
 
             return numRows * rowHeight;
@@ -1305,12 +1337,18 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
 
             if (photoRows && photoRows.length > 0) {
                 const photoPromises = photoRows.slice(0, 2).map(async (row) => {
-                    const url = new URL(row.photo_url);
-                    url.searchParams.append('report', 'true');
-                    url.searchParams.append('t', Date.now().toString());
-                    const res = await fetch(url.toString(), { mode: 'cors', credentials: 'omit', cache: 'no-store' });
-                    if (res.ok) return await res.arrayBuffer();
-                    return null;
+                    if (!row.photo_url) return null;
+                    try {
+                        const url = new URL(row.photo_url);
+                        url.searchParams.append('t', Date.now().toString());
+                        const res = await fetch(url.toString(), { mode: 'cors', credentials: 'omit', cache: 'no-store' });
+                        if (res.ok) return await res.arrayBuffer();
+                        console.warn(`Word Report: Failed to fetch photo ${row.photo_url}`, res.status);
+                        return null;
+                    } catch (e) {
+                        console.error(`Word Report: Error fetching photo ${row.photo_url}`, e);
+                        return null;
+                    }
                 });
                 const results = await Promise.all(photoPromises);
                 photos.push(...(results.filter(Boolean) as ArrayBuffer[]));

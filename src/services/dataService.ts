@@ -286,7 +286,17 @@ export const createSnag = async (projectId: string, snag: Omit<Snag, 'id' | 'pro
 
 export const updateSnag = async (projectId: string, snagId: string, data: Partial<Snag>) => {
     const docRef = doc(db, 'projects', projectId, 'snags', snagId);
-    await updateDoc(docRef, data);
+
+    // Sanitize: remove undefined values as they cause Firebase updateDoc to fail
+    const sanitized: any = {};
+    Object.keys(data).forEach(key => {
+        const val = (data as any)[key];
+        if (val !== undefined) {
+            sanitized[key] = val;
+        }
+    });
+
+    await updateDoc(docRef, sanitized);
 };
 
 export const deleteSnag = async (projectId: string, snagId: string) => {

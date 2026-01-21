@@ -1,0 +1,20 @@
+[
+    {
+        "origin": [
+            "https://bpas-snagging-tool.vercel.app",
+            "http://localhost:5173"
+        ],
+        "method": [
+            "GET",
+            "PUT",
+            "POST",
+            "DELETE",
+            "HEAD"
+        ],
+        "responseHeader": [
+            "Content-Type",
+            "Access-Control-Allow-Origin"
+        ],
+        "maxAgeSeconds": 3600
+    }
+]

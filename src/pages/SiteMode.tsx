@@ -203,7 +203,7 @@ const SiteMode: React.FC = () => {
 
     try {
       await updateSnag(projectId, editingSnagId, {
-        title: draft.title?.trim(),
+        title: draft.title?.trim() || "Untitled snag",
         description: draft.description?.trim() || null,
         priority: (draft.priority || 'medium') as SnagPriority,
         assigned_to: draft.assigneeId || null
