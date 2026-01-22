@@ -5,7 +5,7 @@ import { Project } from '../types';
 import { useAuth } from '../hooks/useAuth';
 
 const Projects: React.FC = () => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [snagCounts, setSnagCounts] = useState<Record<string, number>>({});
   const [form, setForm] = useState<Partial<Project>>({ name: '' });
@@ -52,7 +52,8 @@ const Projects: React.FC = () => {
         inspection_type: form.inspection_type,
         inspection_scope: form.inspection_scope,
         inspection_description: form.inspection_description,
-        status: 'active'
+        status: 'active',
+        creator: profile ? { full_name: profile.full_name } : null
       });
 
       await fetchProjects();

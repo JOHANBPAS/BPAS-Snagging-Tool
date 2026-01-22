@@ -97,6 +97,12 @@ export const ProjectHeader: React.FC<Props> = ({ project, snags, action, onEdit,
                             <p className="text-sm font-semibold text-slate-900">{project.address}</p>
                         </div>
                     )}
+                    {project.creator?.full_name && (
+                        <div>
+                            <p className="text-xs uppercase tracking-wide text-slate-500 font-medium mb-1">Created By</p>
+                            <p className="text-sm font-semibold text-slate-900">{project.creator.full_name}</p>
+                        </div>
+                    )}
                     {project.project_number && (
                         <div>
                             <p className="text-xs uppercase tracking-wide text-slate-500 font-medium mb-1">Project #</p>

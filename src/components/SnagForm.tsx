@@ -206,19 +206,20 @@ export const SnagForm: React.FC<Props> = ({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs uppercase tracking-wide text-slate-500">On-site capture</p>
-          <h3 className="text-lg font-semibold text-slate-900">{isEditing ? 'Edit snag' : 'Create a new snag'}</h3>
-          {effectiveCoords ? (
-            <p className="text-xs font-raleway text-bpas-grey">
-              Floor {effectiveCoords.page} · {(effectiveCoords.x * 100).toFixed(1)}%, {(effectiveCoords.y * 100).toFixed(1)}%
-            </p>
-          ) : (
-            <p className="text-xs font-raleway text-rose-600">Tap the floor plan to place this snag before saving.</p>
-          )}
-        </div>
+    <>
+      <form onSubmit={handleSubmit} className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate-500">On-site capture</p>
+            <h3 className="text-lg font-semibold text-slate-900">{isEditing ? 'Edit snag' : 'Create a new snag'}</h3>
+            {effectiveCoords ? (
+              <p className="text-xs font-raleway text-bpas-grey">
+                Floor {effectiveCoords.page} · {(effectiveCoords.x * 100).toFixed(1)}%, {(effectiveCoords.y * 100).toFixed(1)}%
+              </p>
+            ) : (
+              <p className="text-xs font-raleway text-rose-600">Tap the floor plan to place this snag before saving.</p>
+            )}
+          </div>
         <div className="flex justify-end gap-3 pt-4">
           {onCancel && (
             <button
@@ -462,5 +463,6 @@ export const SnagForm: React.FC<Props> = ({
         />
       )}
     </form>
+    </>
   );
 };
