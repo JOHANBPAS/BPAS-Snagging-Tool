@@ -631,7 +631,7 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
             fontSize: 9,
             font: 'helvetica',
             textColor: [45, 55, 72],
-            cellPadding: [8, 6],
+            cellPadding: [8, 4],
             overflow: 'linebreak',
             valign: 'middle',
         },
@@ -650,11 +650,11 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
             fillColor: [248, 248, 252],
         },
         columnStyles: {
-            0: { cellWidth: 30, halign: 'center' },
-            1: { cellWidth: 100 },
-            2: { cellWidth: 90 },
-            3: { halign: 'center', cellWidth: 65 },
-            4: { halign: 'center', cellWidth: 50 },
+            0: { cellWidth: 25, halign: 'center' },
+            1: { cellWidth: 75 },
+            2: { cellWidth: 65 },
+            3: { halign: 'center', cellWidth: 50 },
+            4: { halign: 'center', cellWidth: 45 },
             5: { halign: 'right', cellWidth: 60 },
         },
         body: [...snags]
@@ -991,18 +991,6 @@ export const generateReport = async ({ project, snags, onProgress }: ReportGener
 
     contactDetails.forEach((line, idx) => {
         doc.text(line, margin, finalY + 28 + idx * 8);
-    });
-
-    // Directors list
-    finalY += 90;
-    doc.setFontSize(7);
-    doc.setTextColor(100, 110, 120);
-    const directors = [
-        'Directors: J van Rooyen (Managing), A Pieterse, M van der Merwe',
-        'Registration: BPAS Architects (Pty) Ltd - Reg No: 2015/123456/07',
-    ];
-    directors.forEach((line, idx) => {
-        doc.text(line, margin, finalY + idx * 8);
     });
 
     const pdf = doc.output('blob');
