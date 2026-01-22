@@ -27,7 +27,7 @@ const convertDates = (data: any) => {
     if (!data) return data;
     const res = { ...data };
     // Convert common timestamp fields
-    ['created_at', 'start_date', 'end_date', 'due_date'].forEach(field => {
+    ['created_at', 'start_date', 'end_date', 'due_date', 'generated_at', 'updated_at'].forEach(field => {
         if (res[field] && res[field] instanceof Timestamp) {
             res[field] = res[field].toDate().toISOString();
         }
@@ -218,7 +218,7 @@ export const getReports = async (): Promise<any[]> => {
     const reportsCol = collection(db, 'project_reports');
     const q = query(reportsCol, orderBy('generated_at', 'desc'));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return snapshot.docs.map(doc => ({ id: doc.id, ...convertDates(doc.data()) }));
 };
 
 export const deleteReport = async (reportId: string, fileUrl?: string) => {
