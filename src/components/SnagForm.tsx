@@ -380,6 +380,36 @@ export const SnagForm: React.FC<Props> = ({
 
       <div className="space-y-2">
         <span className="text-sm text-slate-600">Attach photos</span>
+        
+        {/* Existing Photos */}
+        {existingPhotos.length > 0 && (
+          <div className="mb-3">
+            <p className="text-xs text-slate-500 mb-2">Existing photos ({existingPhotos.length})</p>
+            <div className="flex flex-wrap gap-2">
+              {existingPhotos.map((photo) => (
+                <div key={photo.id} className="relative group">
+                  <img
+                    src={photo.url}
+                    className="h-20 w-20 rounded-lg object-cover cursor-pointer border border-slate-200"
+                    onClick={() => window.open(photo.url, '_blank')}
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg pointer-events-none">
+                    <span className="text-xs text-white font-medium">View</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setExistingPhotos(prev => prev.filter(p => p.id !== photo.id))}
+                    className="absolute -top-2 -right-2 bg-rose-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow-sm"
+                    title="Remove photo"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        
         <input
           type="file"
           multiple
@@ -389,26 +419,29 @@ export const SnagForm: React.FC<Props> = ({
           className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-brand focus:outline-none"
         />
         {(pendingPhotos.length > 0) && (
-          <div className="flex flex-wrap gap-2">
-            {pendingPhotos.map((photo, idx) => (
-              <div key={photo.preview + idx} className="relative group">
-                <img
-                  src={photo.preview}
-                  className="h-20 w-20 rounded-lg object-cover cursor-pointer border border-slate-200"
-                  onClick={() => setAnnotatingPhoto({ index: idx, src: photo.preview })}
-                />
-                <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg pointer-events-none">
-                  <span className="text-xs text-white font-medium">Annotate</span>
+          <div>
+            <p className="text-xs text-slate-500 mb-2">New photos ({pendingPhotos.length})</p>
+            <div className="flex flex-wrap gap-2">
+              {pendingPhotos.map((photo, idx) => (
+                <div key={photo.preview + idx} className="relative group">
+                  <img
+                    src={photo.preview}
+                    className="h-20 w-20 rounded-lg object-cover cursor-pointer border border-slate-200"
+                    onClick={() => setAnnotatingPhoto({ index: idx, src: photo.preview })}
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg pointer-events-none">
+                    <span className="text-xs text-white font-medium">Annotate</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPendingPhotos(prev => prev.filter((_, i) => i !== idx))}
+                    className="absolute -top-2 -right-2 bg-rose-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow-sm"
+                  >
+                    ✕
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setPendingPhotos(prev => prev.filter((_, i) => i !== idx))}
-                  className="absolute -top-2 -right-2 bg-rose-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow-sm"
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         )}
       </div>
