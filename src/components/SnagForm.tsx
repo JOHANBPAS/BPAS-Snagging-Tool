@@ -392,10 +392,11 @@ export const SnagForm: React.FC<Props> = ({
                   <img
                     src={photo.url}
                     className="h-20 w-20 rounded-lg object-cover cursor-pointer border border-slate-200"
-                    onClick={() => window.open(photo.url, '_blank')}
+                    onClick={() => setAnnotatingExisting(photo)}
                   />
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg pointer-events-none">
-                    <span className="text-xs text-white font-medium">View</span>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg pointer-events-none space-y-1">
+                    <span className="text-xs text-white font-medium">✏️ Annotate</span>
+                    <span className="text-xs text-white/70">or View</span>
                   </div>
                   <button
                     type="button"
@@ -463,6 +464,22 @@ export const SnagForm: React.FC<Props> = ({
           };
           setPendingPhotos(newPhotos);
           setAnnotatingPhoto(null);
+        }}
+      />
+    )}
+
+    {/* Image Annotator Modal for Existing Photos */}
+    {annotatingExisting && (
+      <ImageAnnotator
+        imageSrc={annotatingExisting.url}
+        onCancel={() => setAnnotatingExisting(null)}
+        onSave={(file) => {
+          // Add annotated version as a pending photo
+          setPendingPhotos((prev) => [...prev, {
+            file,
+            preview: URL.createObjectURL(file),
+          }]);
+          setAnnotatingExisting(null);
         }}
       />
     )}
