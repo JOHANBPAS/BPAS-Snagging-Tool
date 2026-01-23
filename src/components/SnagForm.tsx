@@ -427,16 +427,18 @@ export const SnagForm: React.FC<Props> = ({
                 <div key={photo.preview + idx} className="relative group">
                   <img
                     src={photo.preview}
-                    className="h-20 w-20 rounded-lg object-cover cursor-pointer border border-slate-200"
+                    className="h-20 w-20 rounded-lg object-cover cursor-pointer border-2 border-slate-300 hover:border-bpas-yellow transition-colors"
                     onClick={() => setAnnotatingPhoto({ index: idx, src: photo.preview })}
+                    title="Click to annotate"
                   />
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg pointer-events-none">
-                    <span className="text-xs text-white font-medium">Annotate</span>
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg pointer-events-none">
+                    <span className="text-xs text-white font-bold">✏️ Annotate</span>
                   </div>
                   <button
                     type="button"
                     onClick={() => setPendingPhotos(prev => prev.filter((_, i) => i !== idx))}
-                    className="absolute -top-2 -right-2 bg-rose-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow-sm"
+                    className="absolute -top-2 -right-2 bg-rose-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs shadow-md hover:bg-rose-600"
+                    title="Remove photo"
                   >
                     ✕
                   </button>
@@ -446,23 +448,24 @@ export const SnagForm: React.FC<Props> = ({
           </div>
         )}
       </div>
-
-      {annotatingPhoto && (
-        <ImageAnnotator
-          imageSrc={annotatingPhoto.src}
-          onCancel={() => setAnnotatingPhoto(null)}
-          onSave={(file) => {
-            const newPhotos = [...pendingPhotos];
-            newPhotos[annotatingPhoto.index] = {
-              file,
-              preview: URL.createObjectURL(file),
-            };
-            setPendingPhotos(newPhotos);
-            setAnnotatingPhoto(null);
-          }}
-        />
-      )}
     </form>
+
+    {/* Image Annotator Modal - Rendered outside form for proper z-index layering */}
+    {annotatingPhoto && (
+      <ImageAnnotator
+        imageSrc={annotatingPhoto.src}
+        onCancel={() => setAnnotatingPhoto(null)}
+        onSave={(file) => {
+          const newPhotos = [...pendingPhotos];
+          newPhotos[annotatingPhoto.index] = {
+            file,
+            preview: URL.createObjectURL(file),
+          };
+          setPendingPhotos(newPhotos);
+          setAnnotatingPhoto(null);
+        }}
+      />
+    )}
     </>
   );
 };

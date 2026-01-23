@@ -194,7 +194,7 @@ export const ImageAnnotator: React.FC<Props> = ({ imageSrc, onSave, onCancel }) 
     };
 
     return (
-        <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-black/90 p-4">
+        <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-black/90 p-4">
             <div className="mb-4 flex w-full max-w-3xl items-center justify-between text-white">
                 <h3 className="text-lg font-semibold">Annotate Photo</h3>
                 <div className="flex gap-4">
