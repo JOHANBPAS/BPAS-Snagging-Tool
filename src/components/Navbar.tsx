@@ -4,7 +4,7 @@ import { brandAssets } from '../lib/brand';
 import { useAuth } from '../hooks/useAuth';
 
 export const Navbar: React.FC = () => {
-  const { signOut, profile } = useAuth();
+  const { signOut, profile, isAdmin } = useAuth();
 
   return (
     <header className="sticky top-0 z-20 border-b border-bpas-grey/30 bg-bpas-black text-white shadow">
@@ -32,6 +32,16 @@ export const Navbar: React.FC = () => {
             <span className="hidden sm:block text-white/80">
               {profile.full_name} ({profile.role})
             </span>
+          )}
+          {isAdmin && (
+            <button
+              onClick={() => {
+                window.location.href = '/?admin=true';
+              }}
+              className="rounded-full border border-bpas-yellow/60 px-3 py-1 text-xs font-syne text-bpas-yellow hover:bg-bpas-yellow/10"
+            >
+              Admin Panel
+            </button>
           )}
           <Link to="/settings" className="font-syne text-bpas-yellow hover:text-yellow-400">
             Settings

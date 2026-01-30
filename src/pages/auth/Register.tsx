@@ -1,14 +1,13 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import { UserRole } from '../../types';
 
 const Register: React.FC = () => {
   const { signUp, loading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
-  const [role, setRole] = useState<UserRole>('architect');
+  const [inviteCode, setInviteCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
@@ -16,7 +15,7 @@ const Register: React.FC = () => {
     e.preventDefault();
     setError(null);
     try {
-      await signUp(email, password, fullName, role);
+      await signUp(email, password, inviteCode, fullName);
       navigate('/dashboard');
     } catch (err: any) {
       setError(err.message);
@@ -59,16 +58,12 @@ const Register: React.FC = () => {
             />
           </label>
           <label className="space-y-1 text-sm">
-            <span className="text-slate-700">Role</span>
-            <select
-              value={role}
-              onChange={(e) => setRole(e.target.value as UserRole)}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 focus:border-brand focus:outline-none"
-            >
-              <option value="admin">Admin</option>
-              <option value="architect">Architect / Site Manager</option>
-              <option value="contractor">Contractor</option>
-            </select>
+            <span className="text-slate-700">Invite code</span>
+            <input
+              value={inviteCode}
+              onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 uppercase tracking-widest focus:border-brand focus:outline-none"
+            />
           </label>
           <button
             type="submit"

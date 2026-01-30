@@ -358,13 +358,13 @@ export const addSnagComment = async (projectId: string, snagId: string, comment:
 // --- Users / Profiles ---
 
 export const getUsers = async (): Promise<any[]> => {
-    const usersCol = collection(db, 'users');
+    const usersCol = collection(db, 'profiles');
     const snapshot = await getDocs(usersCol);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 };
 
 export const getUser = async (userId: string): Promise<Profile | null> => {
-    const docRef = doc(db, 'users', userId);
+    const docRef = doc(db, 'profiles', userId);
     const snapshot = await getDoc(docRef);
     if (!snapshot.exists()) return null;
     return { id: snapshot.id, ...snapshot.data() } as Profile;
