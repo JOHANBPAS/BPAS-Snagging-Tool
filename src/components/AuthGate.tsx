@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { getInviteByCode, isInviteCodeValid } from '../services/inviteService';
@@ -7,12 +7,35 @@ const AuthGate: React.FC = () => {
   const { signIn, signUp, loading } = useAuth();
   const navigate = useNavigate();
   const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [shuffledText, setShuffledText] = useState('Welcome back');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (mode !== 'login') return;
+    const text = 'Welcome back';
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+    let iteration = 0;
+    const interval = setInterval(() => {
+      setShuffledText(
+        text
+          .split('')
+          .map((char, index) => {
+            if (char === ' ') return ' ';
+            if (index < iteration) return text[index];
+            return chars[Math.floor(Math.random() * chars.length)];
+          })
+          .join('')
+      );
+      if (iteration >= text.length) clearInterval(interval);
+      iteration += 1 / 3;
+    }, 30);
+    return () => clearInterval(interval);
+  }, [mode]);
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -63,12 +86,19 @@ const AuthGate: React.FC = () => {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-bpas-black px-4">
-      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/95 p-6 shadow-2xl">
+    <div className="flex min-h-screen items-center justify-center bg-bpas-black px-4 relative overflow-hidden">
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute -inset-[10px] opacity-50">
+          <div className="absolute top-0 -left-4 w-72 h-72 bg-bpas-yellow rounded-full mix-blend-multiply filter blur-xl animate-blob" />
+          <div className="absolute top-0 -right-4 w-72 h-72 bg-purple-300 rounded-full mix-blend-multiply filter blur-xl animate-blob animation-delay-2000" />
+          <div className="absolute -bottom-8 left-20 w-72 h-72 bg-pink-300 rounded-full mix-blend-multiply filter blur-xl animate-blob animation-delay-4000" />
+        </div>
+      </div>
+      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/95 p-6 shadow-2xl relative z-10">
         <div className="mb-4 text-center space-y-1">
           <p className="text-xs uppercase tracking-[0.3em] text-bpas-grey font-syne">bpas architects</p>
           <h1 className="text-2xl font-syne font-semibold text-bpas-black">
-            {mode === 'login' ? 'Welcome back' : 'Create your account'}
+            {mode === 'login' ? shuffledText : 'Create your account'}
           </h1>
           <div className="mx-auto h-0.5 w-12 bg-bpas-yellow" />
           <p className="text-sm font-raleway text-bpas-grey">
@@ -132,17 +162,10 @@ const AuthGate: React.FC = () => {
             <button type="submit" disabled={loading} className="btn-primary w-full">
               {loading ? 'Signing in...' : 'Sign in'}
             </button>
-            <div className="flex justify-between text-sm font-raleway text-bpas-grey">
+            <div className="text-center text-sm font-raleway text-bpas-grey">
               <Link className="text-bpas-yellow hover:text-yellow-500" to="/reset-password">
                 Forgot password?
               </Link>
-              <button
-                type="button"
-                onClick={() => setMode('signup')}
-                className="text-bpas-yellow hover:text-yellow-500"
-              >
-                Create account
-              </button>
             </div>
           </form>
         ) : (
