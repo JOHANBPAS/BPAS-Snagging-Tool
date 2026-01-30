@@ -87,19 +87,20 @@ const AuthGate: React.FC = () => {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-bpas-black px-4 relative overflow-hidden">
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -inset-[10px] opacity-50">
-          <div className="absolute top-0 -left-4 w-72 h-72 bg-bpas-yellow rounded-full mix-blend-multiply filter blur-xl animate-blob" />
-          <div className="absolute top-0 -right-4 w-72 h-72 bg-purple-300 rounded-full mix-blend-multiply filter blur-xl animate-blob animation-delay-2000" />
-          <div className="absolute -bottom-8 left-20 w-72 h-72 bg-pink-300 rounded-full mix-blend-multiply filter blur-xl animate-blob animation-delay-4000" />
+      <div className="absolute inset-0 flex items-center justify-center">
+        {/* Rotating prism pyramid */}
+        <div className="absolute w-96 h-96 animate-spin-slow">
+          <div className="absolute inset-0 bg-gradient-to-br from-bpas-yellow via-transparent to-purple-500 opacity-40 blur-3xl rounded-full" />
+          <div className="absolute inset-0 bg-gradient-to-tl from-cyan-400 via-transparent to-transparent opacity-30 blur-3xl rounded-full" />
+          <div className="absolute inset-0 bg-gradient-to-t from-pink-500 via-transparent to-transparent opacity-30 blur-3xl rounded-full" />
+        </div>
+        {/* Light beams */}
+        <div className="absolute inset-0">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-96 bg-gradient-to-b from-transparent via-white/5 to-transparent opacity-50 animate-pulse" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-full bg-gradient-to-r from-transparent via-white/5 to-transparent opacity-50 animate-pulse animation-delay-1000" />
         </div>
       </div>
-      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/95 p-6 shadow-2xl relative z-10">
-        <div className="mb-4 text-center space-y-1">
-          <p className="text-xs uppercase tracking-[0.3em] text-bpas-grey font-syne">bpas architects</p>
-          <h1 className="text-2xl font-syne font-semibold text-bpas-black">
-            {mode === 'login' ? shuffledText : 'Create your account'}
-          </h1>
+      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/95 p-6 shadow-2xl relative z-10\">\n        <div className=\"mb-4 text-center space-y-1\">\n          <p className=\"text-xs uppercase tracking-[0.3em] text-bpas-grey font-syne\">bpas architects</p>\n          <h1 className=\"text-2xl font-syne font-semibold text-bpas-black\">\n            {mode === 'login' ? shuffledText : 'Create your account'}\n          </h1>
           <div className="mx-auto h-0.5 w-12 bg-bpas-yellow" />
           <p className="text-sm font-raleway text-bpas-grey">
             {mode === 'login'
