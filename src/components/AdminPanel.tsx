@@ -142,9 +142,19 @@ const AdminPanel: React.FC = () => {
   return (
     <div className="min-h-screen bg-bpas-black px-4 py-8 text-white">
       <div className="mx-auto max-w-6xl space-y-6">
-        <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-bpas-grey font-syne">Admin Panel</p>
-          <h1 className="text-3xl font-syne font-semibold">Manage invites and users</h1>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.3em] text-bpas-grey font-syne">Admin Panel</p>
+            <h1 className="text-3xl font-syne font-semibold">Manage invites and users</h1>
+          </div>
+          <button
+            onClick={() => {
+              window.location.href = '/dashboard';
+            }}
+            className="rounded-lg border border-white/20 bg-white/10 px-4 py-2 text-sm font-syne text-white hover:bg-white/20"
+          >
+            ← Back to App
+          </button>
         </div>
 
         {(message || error) && (
