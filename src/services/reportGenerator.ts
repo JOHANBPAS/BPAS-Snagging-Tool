@@ -1593,6 +1593,80 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
                         })
                     );
                 });
+
+                const snagsWithCoords = snapshotsForPlan.filter(
+                    (snag) => snag.plan_x != null && snag.plan_y != null
+                );
+
+                if (snagsWithCoords.length > 0) {
+                    children.push(
+                        new Paragraph({
+                            children: [new TextRun({ text: "Location Snippets:", bold: true })],
+                            spacing: { before: 150, after: 100 },
+                        })
+                    );
+
+                    const snippetCells: TableCell[] = [];
+
+                    for (const snag of snagsWithCoords) {
+                        const idx = snagIndexMap.get(snag.id) || 0;
+                        const snippet = await createLocationSnippet(
+                            planImage,
+                            snag.plan_x as number,
+                            snag.plan_y as number,
+                            idx,
+                            200
+                        );
+
+                        if (!snippet) continue;
+
+                        const snippetData = extractBase64Image(snippet);
+                        if (!snippetData) continue;
+
+                        const snippetBytes = base64ToUint8Array(snippetData.base64);
+
+                        snippetCells.push(
+                            new TableCell({
+                                children: [
+                                    new Paragraph({
+                                        children: [new TextRun({ text: `${idx}. ${snag.title}`, bold: true })],
+                                        spacing: { after: 50 },
+                                    }),
+                                    new Paragraph({
+                                        children: [
+                                            new ImageRun({
+                                                data: snippetBytes,
+                                                type: snippetData.type,
+                                                transformation: {
+                                                    width: 160,
+                                                    height: 160,
+                                                },
+                                            }),
+                                        ],
+                                    }),
+                                ],
+                            })
+                        );
+                    }
+
+                    if (snippetCells.length > 0) {
+                        const snippetRows: TableRow[] = [];
+                        for (let i = 0; i < snippetCells.length; i += 2) {
+                            snippetRows.push(
+                                new TableRow({
+                                    children: snippetCells.slice(i, i + 2),
+                                })
+                            );
+                        }
+
+                        children.push(
+                            new Table({
+                                rows: snippetRows,
+                                width: { size: 100, type: WidthType.PERCENTAGE },
+                            })
+                        );
+                    }
+                }
                 
                 children.push(new Paragraph({ children: [new PageBreak()] }));
                 await yieldToMain();
