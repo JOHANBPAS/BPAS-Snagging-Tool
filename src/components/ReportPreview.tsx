@@ -11,7 +11,7 @@ interface Props {
 }
 
 export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [loading, setLoading] = useState(false);
   const [publicUrl, setPublicUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -27,6 +27,7 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
         project,
         snags,
         onProgress: setProgress,
+        generatedBy: profile?.full_name || user?.email || undefined,
       });
 
       // Upload to Firebase Storage
@@ -74,6 +75,7 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
         project,
         snags,
         onProgress: setProgress,
+        generatedBy: profile?.full_name || user?.email || undefined,
       });
       saveAs(blob, fileName);
     } catch (err: any) {
