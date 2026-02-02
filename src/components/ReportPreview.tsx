@@ -65,6 +65,7 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
     }
   };
 
+
   const handleExportWord = async () => {
     setLoading(true);
     setError(null);
@@ -77,16 +78,21 @@ export const ReportPreview: React.FC<Props> = ({ project, snags }) => {
         onProgress: setProgress,
         generatedBy: profile?.full_name || user?.email || undefined,
       });
-      saveAs(blob, fileName);
+      
+      // Ensure correct MIME type for Office compatibility
+      const docxMimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      const typedBlob = new Blob([blob], { type: docxMimeType });
+      
+      setProgress('Saving Word document...');
+      saveAs(typedBlob, fileName);
     } catch (err: any) {
       console.error('Word export failed:', err);
-      setError('Word export failed. Please try again.');
+      setError(err.message || 'Word export failed. Please try again.');
     } finally {
       setLoading(false);
       setProgress('');
     }
   };
-
   return (
     <div className="space-y-2 rounded-xl border border-slate-200 bg-white px-3 py-3 sm:px-4 shadow-sm w-full max-w-full overflow-x-hidden">
       <div className="flex items-center justify-between">

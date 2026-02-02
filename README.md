@@ -27,23 +27,30 @@ A mobile-first React + TypeScript + Vite frontend powered by Supabase (PostgreSQ
 - Checklist templates (fields pulled into snag form)
 - Mobile-first Tailwind UI with loading/error awareness
 
-## Supabase setup
+## Firebase setup
 
-1. Create a Supabase project.
-2. Run the SQL in `supabase/schema.sql` via the SQL editor or CLI:
-   ```sql
-   -- copy contents of supabase/schema.sql
-   ```
-3. Create Storage buckets: `plans`, `snag-photos`, `reports`.
-4. Enable email/password auth in Supabase Auth settings.
+1. Create a Firebase project in the [Firebase Console](https://console.firebase.google.com).
+2. Enable email/password authentication in **Authentication > Sign-in method**.
+3. Create Firestore database in **Firestore Database** with your desired security rules.
+4. Create Cloud Storage buckets:
+   - `snag-photos` – for snag photo uploads
+   - `plans` – for floor plan images/PDFs
+   - `reports` – for generated PDF/Word reports
+5. Set all buckets to public read access or add appropriate security rules.
 
 ### Environment variables
 
-Copy `.env.example` to `.env` and fill with your project values:
+Copy `.env.example` to `.env` and fill with your Firebase config:
 
 ```
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key
+VITE_FIREBASE_CONFIG={
+  "apiKey": "your-api-key",
+  "authDomain": "your-project.firebaseapp.com",
+  "projectId": "your-project-id",
+  "storageBucket": "your-project.appspot.com",
+  "messagingSenderId": "your-messaging-id",
+  "appId": "your-app-id"
+}
 ```
 
 ## Local development
@@ -59,22 +66,26 @@ The dev server runs at http://localhost:5173.
 
 ## Workflows
 
-- **Auth**: login/register/forgot-password screens connect to Supabase auth. Profiles table stores `full_name` and `role`.
-- **Projects**: create a project with client, address, schedule. Select a checklist template via DB column `checklist_template_id` if desired.
-- **Snags**: add snags from the list or by tapping the floor plan (auto-creates a pin-based snag). Update status/assignee/dates.
-- **Comments & photos**: add threaded comments and upload photos to Storage buckets.
-- **Reports**: generate a PDF from the project detail page; file uploads to the `reports` bucket and returns a shareable link.
-- **Dashboard**: displays project counts, open/due snags, and status chart.
+- **Auth**: login/register/forgot-password screens connect to Firebase Auth. User profiles are stored in Firestore with `full_name`, `email`, and `role` fields. Admin role detected via custom claims.
+- **Projects**: create a project with client, address, schedule. Firestore stores projects in the `projects` collection with snags as subcollections.
+- **Snags**: add snags from the list or by tapping the floor plan (auto-creates a pin-based snag with normalized x/y coordinates). Update status/assignee/due dates. Photos stored as subcollection.
+- **Comments & photos**: add threaded comments and upload photos to Firebase Storage `snag-photos/` bucket. Multiple photos per snag supported.
+- **Reports**: generate PDF or Word reports from the project detail page with floor plan overlays, snag annotations, and newest photos. Files upload to `reports` bucket.
+- **Dashboard**: displays project counts, open/due snags, and status chart using Firestore queries.
+- **Offline**: all mutations are queued in IndexedDB and synced when reconnected.
 
 ## Offline-friendly notes
 
-- Forms hold local state until submission; errors are surfaced inline.
-- Architecture is ready for caching/offline plugins (e.g., add SW/IndexedDB later).
+- All mutations (create/update/delete) are queued in IndexedDB via `offlineStorage.ts`.
+- When reconnected, mutations are synced to Firestore via `syncService.ts`.
+- Photos are batched and uploaded to Firebase Storage after mutations complete.
+- Offline IDs are mapped to server IDs during sync for consistency.
 
-## Security / RLS
+## Security / Firestore Rules
 
-- Policies in `supabase/schema.sql` scope access to project owners and authenticated users; adjust for your org rules (e.g., per-tenant filters).
-- Avoid exposing the service role key on the client; only use the anon key in `.env`.
+- Firestore security rules scope access to project owners and authenticated users. Rules are managed in the Firebase Console under **Firestore Database > Rules**.
+- Never expose service account keys in the client. Only use the public Firebase config in `VITE_FIREBASE_CONFIG`.
+- All data access respects Firestore rules configured in Firebase Console. Client queries auto-filter by user permissions.
 
 ## BPAS branding
 
@@ -84,7 +95,7 @@ The dev server runs at http://localhost:5173.
   - `fingerprint.png` (used for watermarking/empty states)
   - `letterhead.png` (used in PDF/export header)
   - You can add alt variants and point `brandAssets` to them.
-- Storage buckets: set `plans`, `snag-photos`, and `reports` to Public **or** add Storage policies for insert/select on the authenticated role.
-- PDF export (`src/components/ReportPreview.tsx`) pulls the letterhead/logo/fingerprint from `/brand/...`, applies BPAS colors to headings/status chips, and includes contact details from `brand.ts`. Keep the letterhead image sized to ~40px high when drawn across the page to preserve margins.
+- Storage buckets: set `plans`, `snag-photos`, and `reports` to public read or add appropriate Firebase Storage rules for authenticated users.
+- Report export (`src/components/ReportPreview.tsx`) pulls letterhead/logo/fingerprint from `/brand/...`, applies BPAS colors to headings/status chips, and includes contact details from `brand.ts`. Keep the letterhead image sized to ~40px high when drawn across the page to preserve margins.
 - Buttons/components: use the provided utility classes to keep primary actions yellow on black, secondary actions grey on white, and headings in Syne with the yellow underline (`section-accent`).
 - If you change palette or fonts, update both `tailwind.config.cjs` and `brand.ts` for consistency across UI and exports.

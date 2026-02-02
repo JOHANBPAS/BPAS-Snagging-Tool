@@ -1038,49 +1038,102 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
     const children: any[] = [];
 
     // === COVER PAGE ===
+
+    // === COVER PAGE ===
     children.push(
         new Paragraph({
             text: "SITE REPORT",
-            heading: "Title",
             alignment: AlignmentType.CENTER,
-            spacing: { after: 400 },
+            spacing: { line: 600, after: 600, before: 600 },
+            children: [
+                new TextRun({
+                    text: "SITE REPORT",
+                    size: 56, // 28pt
+                    bold: true,
+                    color: "121212", // brandColors.black
+                    font: "Syne",
+                }),
+            ],
+        }),
+        new Paragraph({
+            text: "",
+            spacing: { after: 300 },
         }),
         new Paragraph({
             text: project.name,
             alignment: AlignmentType.CENTER,
-            spacing: { after: 200 },
-            style: "Heading1",
+            spacing: { after: 300 },
+            children: [
+                new TextRun({
+                    text: project.name,
+                    size: 28, // 14pt
+                    bold: true,
+                    color: "5a6061", // brandColors.grey
+                    font: "Raleway",
+                }),
+            ],
         }),
         new Paragraph({
+            text: "",
+            spacing: { after: 600 },
+        }),
+        new Paragraph({
+            text: `Client: ${project.client_name || 'Not Specified'}`,
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 200 },
             children: [
                 new TextRun({
                     text: `Client: ${project.client_name || 'Not Specified'}`,
-                    size: 22,
+                    size: 22, // 11pt
+                    color: "5a6061",
+                    font: "Raleway",
                 }),
             ],
-            alignment: AlignmentType.CENTER,
-            spacing: { after: 400 },
         }),
-        new Paragraph({
+        ...(project.project_number ? [new Paragraph({
+            text: `Project No: ${project.project_number}`,
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 200 },
             children: [
                 new TextRun({
-                    text: `Report Generated: ${new Date().toLocaleDateString()}`,
-                    size: 20,
-                    color: "808080",
+                    text: `Project No: ${project.project_number}`,
+                    size: 22,
+                    color: "5a6061",
+                    font: "Raleway",
                 }),
             ],
+        })] : []),
+        new Paragraph({
+            text: `Date of Inspection: ${new Date().toLocaleDateString()}`,
             alignment: AlignmentType.CENTER,
             spacing: { after: 800 },
+            children: [
+                new TextRun({
+                    text: `Date of Inspection: ${new Date().toLocaleDateString()}`,
+                    size: 20, // 10pt
+                    color: "969ba0",
+                    font: "Raleway",
+                }),
+            ],
         }),
         new PageBreak(),
     );
+    // === EXECUTIVE SUMMARY ===
 
     // === EXECUTIVE SUMMARY ===
     children.push(
         new Paragraph({
             text: "Executive Summary",
-            heading: "Heading1",
-            spacing: { after: 200 },
+            spacing: { after: 300, before: 200 },
+            children: [
+                new TextRun({
+                    text: "Executive Summary",
+                    size: 32, // 16pt
+                    bold: true,
+                    color: "121212", // brandColors.black
+                    font: "Syne",
+                }),
+            ],
         })
     );
 
@@ -1093,59 +1146,121 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
         priorityCounts[priority] = (priorityCounts[priority] || 0) + 1;
     });
 
+    // Status breakdown table
     children.push(
         new Paragraph({
-            text: "Status Breakdown:",
-            heading: "Heading3",
-            spacing: { after: 100 },
+            text: "Status Breakdown",
+            spacing: { after: 150, before: 150 },
+            children: [
+                new TextRun({
+                    text: "Status Breakdown",
+                    size: 22, // 11pt
+                    bold: true,
+                    color: "121212",
+                    font: "Raleway",
+                }),
+            ],
         })
     );
 
-    Object.entries(statusCounts).forEach(([status, count]) => {
-        children.push(
-            new Paragraph({
+    const statusTableRows = [
+        new TableRow({
+            children: ['Status', 'Count'].map(text =>
+                new TableCell({
+                    children: [new Paragraph({ text, children: [new TextRun({ text, bold: true, color: "FFFFFF" })] })],
+                    shading: { fill: "EBA000" }, // brandColors.yellow
+                })
+            ),
+            tableHeader: true,
+        }),
+        ...Object.entries(statusCounts).map(([status, count]) =>
+            new TableRow({
                 children: [
-                    new TextRun({
-                        text: `${status.charAt(0).toUpperCase() + status.slice(1)}: ${count} snag${count !== 1 ? 's' : ''}`,
+                    new TableCell({
+                        children: [new Paragraph(status.charAt(0).toUpperCase() + status.slice(1))],
+                    }),
+                    new TableCell({
+                        children: [new Paragraph(String(count))],
                     }),
                 ],
-                spacing: { after: 50 },
             })
-        );
-    });
-
-    children.push(new Paragraph({ text: "", spacing: { after: 100 } }));
+        ),
+    ];
 
     children.push(
-        new Paragraph({
-            text: "Priority Breakdown:",
-            heading: "Heading3",
-            spacing: { after: 100 },
+        new Table({
+            rows: statusTableRows,
+            width: { size: 50, type: WidthType.PERCENTAGE },
         })
     );
 
-    Object.entries(priorityCounts).forEach(([priority, count]) => {
-        children.push(
-            new Paragraph({
+    children.push(new Paragraph({ text: "", spacing: { after: 200 } }));
+
+    // Priority breakdown table
+    children.push(
+        new Paragraph({
+            text: "Priority Breakdown",
+            spacing: { after: 150, before: 150 },
+            children: [
+                new TextRun({
+                    text: "Priority Breakdown",
+                    size: 22,
+                    bold: true,
+                    color: "121212",
+                    font: "Raleway",
+                }),
+            ],
+        })
+    );
+
+    const priorityTableRows = [
+        new TableRow({
+            children: ['Priority', 'Count'].map(text =>
+                new TableCell({
+                    children: [new Paragraph({ text, children: [new TextRun({ text, bold: true, color: "FFFFFF" })] })],
+                    shading: { fill: "EBA000" },
+                })
+            ),
+            tableHeader: true,
+        }),
+        ...Object.entries(priorityCounts).map(([priority, count]) =>
+            new TableRow({
                 children: [
-                    new TextRun({
-                        text: `${priority.charAt(0).toUpperCase() + priority.slice(1)}: ${count} snag${count !== 1 ? 's' : ''}`,
+                    new TableCell({
+                        children: [new Paragraph(priority.charAt(0).toUpperCase() + priority.slice(1))],
+                    }),
+                    new TableCell({
+                        children: [new Paragraph(String(count))],
                     }),
                 ],
-                spacing: { after: 50 },
             })
-        );
-    });
+        ),
+    ];
 
+    children.push(
+        new Table({
+            rows: priorityTableRows,
+            width: { size: 50, type: WidthType.PERCENTAGE },
+        })
+    );
     children.push(
         new Paragraph({
             text: "",
             spacing: { after: 200 },
         }),
         new Paragraph({
-            text: "Project Details:",
+            text: "Project Details",
             heading: "Heading3",
-            spacing: { after: 100 },
+            spacing: { after: 150, before: 150 },
+            children: [
+                new TextRun({
+                    text: "Project Details",
+                    size: 22,
+                    bold: true,
+                    color: "121212",
+                    font: "Raleway",
+                }),
+            ],
         }),
         new Paragraph({
             children: [
@@ -1208,14 +1323,24 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
 
     onProgress?.('Generating snag list...');
     await yieldToMain();
+
+    onProgress?.('Generating snag list...');
+    await yieldToMain();
     children.push(
         new Paragraph({
             text: "Snag List Summary",
-            heading: "Heading1",
-            spacing: { after: 200 },
+            spacing: { after: 200, before: 200 },
+            children: [
+                new TextRun({
+                    text: "Snag List Summary",
+                    size: 32,
+                    bold: true,
+                    color: "121212",
+                    font: "Syne",
+                }),
+            ],
         })
     );
-
     const tableRows = [
         new TableRow({
             children: ['#', 'Title', 'Location', 'Status', 'Priority', 'Due Date'].map(text =>
@@ -1353,7 +1478,22 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
         }],
     });
 
-    const blob = await Packer.toBlob(doc);
-    const fileName = formatFileName(project).replace('.pdf', '.docx');
-    return { blob, fileName };
+    onProgress?.('Finalizing Word document...');
+    try {
+        const rawBlob = await Packer.toBlob(doc);
+        
+        if (!rawBlob || rawBlob.size === 0) {
+            throw new Error('Generated Word document is empty or invalid');
+        }
+        
+        // Wrap blob with correct MIME type for Office compatibility
+        const docxMimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        const blob = new Blob([rawBlob], { type: docxMimeType });
+        
+        const fileName = formatFileName(project).replace('.pdf', '.docx');
+        return { blob, fileName };
+    } catch (error) {
+        console.error('Word report generation failed:', error);
+        throw new Error(`Failed to generate Word report: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
 };
