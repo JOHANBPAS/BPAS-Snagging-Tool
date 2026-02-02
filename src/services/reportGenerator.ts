@@ -1236,6 +1236,7 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
                 const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.8));
                 if (blob) {
                     const buffer = await blob.arrayBuffer();
+                    const uint8Array = new Uint8Array(buffer);
                     children.push(
                         new Paragraph({
                             text: `${plan.name} - Page ${plan.page}`,
@@ -1245,7 +1246,7 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
                         new Paragraph({
                             children: [
                                 new ImageRun({
-                                    data: buffer,
+                                    data: uint8Array,
                                     transformation: {
                                         width: 600,
                                         height: 600 * (img.height / img.width),
@@ -1402,13 +1403,13 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
             const images: any[] = [];
             if (locationSnippet) {
                 images.push(new ImageRun({
-                    data: locationSnippet,
+                    data: new Uint8Array(locationSnippet),
                     transformation: { width: 200, height: 200 },
                 } as any));
             }
             photos.forEach(photo => {
                 images.push(new ImageRun({
-                    data: photo,
+                    data: new Uint8Array(photo),
                     transformation: { width: 200, height: 200 },
                 } as any));
             });
@@ -1478,9 +1479,7 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
         }],
     });
 
-    const buffer = await Packer.toBuffer(doc);
-    const uint8Array = new Uint8Array(buffer);
-    const blob = new Blob([uint8Array], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+    const blob = await Packer.toBlob(doc);
     const fileName = formatFileName(project).replace('.pdf', '.docx');
     return { blob, fileName };
 };
