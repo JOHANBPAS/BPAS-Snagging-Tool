@@ -1471,6 +1471,8 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
                 
                 // Compress to 0.7 quality at 800px max (as specified)
                 const compressedPlan = await downscaleImage(planImage, 800, 0.7);
+                // Extract base64 string from data URL
+                const planBase64 = compressedPlan.replace(/^data:image\/[^;]+;base64,/, '');
                 
                 // Add floor plan page
                 children.push(
@@ -1490,7 +1492,7 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
                     new Paragraph({
                         children: [
                             new ImageRun({
-                                data: compressedPlan,
+                                data: planBase64,
                                 type: 'jpg',
                                 transformation: {
                                     width: 750,
@@ -1594,6 +1596,8 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
         // Add photo if available
         if (photoDataUrl) {
             try {
+                // Extract base64 string from data URL
+                const photoBase64 = photoDataUrl.replace(/^data:image\/[^;]+;base64,/, '');
                 snagDetails.push(
                     new Paragraph({
                         children: [new TextRun({ text: "Photo:", bold: true })],
@@ -1602,7 +1606,7 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
                     new Paragraph({
                         children: [
                             new ImageRun({
-                                data: photoDataUrl,
+                                data: photoBase64,
                                 type: 'jpg',
                                 transformation: {
                                     width: 250,
