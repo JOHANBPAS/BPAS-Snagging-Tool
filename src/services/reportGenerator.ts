@@ -307,6 +307,14 @@ const createLocationSnippet = async (
 
 const yieldToMain = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+const extractBase64Image = (dataUrl: string): { base64: string; type: "jpg" | "png" | "gif" | "bmp" } | null => {
+    const match = dataUrl.match(/^data:image\/(png|jpeg|jpg|gif|bmp);base64,(.+)$/i);
+    if (!match) return null;
+    const rawType = match[1].toLowerCase();
+    const type = rawType === "jpeg" ? "jpg" : (rawType as "jpg" | "png" | "gif" | "bmp");
+    return { base64: match[2], type };
+};
+
 // Helper function to format status and priority with color codes
 export const getStatusColor = (status?: string): [number, number, number] => {
     const colors: Record<string, [number, number, number]> = {
@@ -1471,8 +1479,8 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
                 
                 // Compress to 0.7 quality at 800px max (as specified)
                 const compressedPlan = await downscaleImage(planImage, 800, 0.7);
-                // Extract base64 string from data URL
-                const planBase64 = compressedPlan.replace(/^data:image\/[^;]+;base64,/, '');
+                const planImageData = extractBase64Image(compressedPlan);
+                if (!planImageData) continue;
                 
                 // Add floor plan page
                 children.push(
@@ -1492,8 +1500,8 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
                     new Paragraph({
                         children: [
                             new ImageRun({
-                                data: planBase64,
-                                type: 'jpg',
+                                data: planImageData.base64,
+                                type: planImageData.type,
                                 transformation: {
                                     width: 750,
                                     height: 500,
@@ -1596,8 +1604,10 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
         // Add photo if available
         if (photoDataUrl) {
             try {
-                // Extract base64 string from data URL
-                const photoBase64 = photoDataUrl.replace(/^data:image\/[^;]+;base64,/, '');
+                const normalizedPhoto = await downscaleImage(photoDataUrl, 1200, 0.78);
+                const photoImageData = extractBase64Image(normalizedPhoto);
+                if (!photoImageData) throw new Error('Invalid photo data URL');
+
                 snagDetails.push(
                     new Paragraph({
                         children: [new TextRun({ text: "Photo:", bold: true })],
@@ -1606,8 +1616,8 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
                     new Paragraph({
                         children: [
                             new ImageRun({
-                                data: photoBase64,
-                                type: 'jpg',
+                                data: photoImageData.base64,
+                                type: photoImageData.type,
                                 transformation: {
                                     width: 250,
                                     height: 180,
