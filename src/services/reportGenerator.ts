@@ -1096,6 +1096,53 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
         }
     };
 
+    const overlayPlanMarkers = async (
+        planDataUrl: string,
+        planSnags: Snag[],
+        indexMap: Map<string, number>
+    ): Promise<string> =>
+        new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) return resolve(planDataUrl);
+
+                ctx.drawImage(img, 0, 0, img.width, img.height);
+
+                planSnags.forEach((snag) => {
+                    if (snag.plan_x == null || snag.plan_y == null) return;
+                    const x = snag.plan_x * img.width;
+                    const y = snag.plan_y * img.height;
+                    const [r, g, b] = getPriorityColor(snag.priority);
+
+                    ctx.beginPath();
+                    ctx.arc(x, y, 10, 0, 2 * Math.PI);
+                    ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+                    ctx.fill();
+
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.stroke();
+
+                    const idx = indexMap.get(snag.id);
+                    if (idx != null) {
+                        ctx.fillStyle = '#ffffff';
+                        ctx.font = 'bold 10px Arial, sans-serif';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(String(idx), x, y);
+                    }
+                });
+
+                resolve(canvas.toDataURL('image/jpeg', 0.9));
+            };
+            img.onerror = () => resolve(planDataUrl);
+            img.src = planDataUrl;
+        });
+
     const sortedSnags = [...snags].sort((a, b) => {
         if (a.plan_id !== b.plan_id) return (a.plan_id || '').localeCompare(b.plan_id || '');
         const pageA = a.plan_page ?? 999;
@@ -1114,7 +1161,6 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
     // === COVER PAGE ===
     children.push(
         new Paragraph({
-            text: "SITE REPORT",
             alignment: AlignmentType.CENTER,
             spacing: { line: 600, after: 600, before: 600 },
             children: [
@@ -1132,7 +1178,6 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
             spacing: { after: 300 },
         }),
         new Paragraph({
-            text: project.name,
             alignment: AlignmentType.CENTER,
             spacing: { after: 300 },
             children: [
@@ -1150,7 +1195,6 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
             spacing: { after: 600 },
         }),
         new Paragraph({
-            text: `Client: ${project.client_name || 'Not Specified'}`,
             alignment: AlignmentType.CENTER,
             spacing: { after: 200 },
             children: [
@@ -1163,7 +1207,6 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
             ],
         }),
         ...(project.project_number ? [new Paragraph({
-            text: `Project No: ${project.project_number}`,
             alignment: AlignmentType.CENTER,
             spacing: { after: 200 },
             children: [
@@ -1176,7 +1219,6 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
             ],
         })] : []),
         new Paragraph({
-            text: `Date of Inspection: ${new Date().toLocaleDateString()}`,
             alignment: AlignmentType.CENTER,
             spacing: { after: 800 },
             children: [
@@ -1195,7 +1237,6 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
     // === EXECUTIVE SUMMARY ===
     children.push(
         new Paragraph({
-            text: "Executive Summary",
             spacing: { after: 300, before: 200 },
             children: [
                 new TextRun({
@@ -1221,7 +1262,6 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
     // Status breakdown table
     children.push(
         new Paragraph({
-            text: "Status Breakdown",
             spacing: { after: 150, before: 150 },
             children: [
                 new TextRun({
@@ -1239,7 +1279,7 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
         new TableRow({
             children: ['Status', 'Count'].map(text =>
                 new TableCell({
-                    children: [new Paragraph({ text, children: [new TextRun({ text, bold: true, color: "FFFFFF" })] })],
+                    children: [new Paragraph({ children: [new TextRun({ text, bold: true, color: "FFFFFF" })] })],
                     shading: { fill: "EBA000" }, // brandColors.yellow
                 })
             ),
@@ -1271,7 +1311,6 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
     // Priority breakdown table
     children.push(
         new Paragraph({
-            text: "Priority Breakdown",
             spacing: { after: 150, before: 150 },
             children: [
                 new TextRun({
@@ -1289,7 +1328,7 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
         new TableRow({
             children: ['Priority', 'Count'].map(text =>
                 new TableCell({
-                    children: [new Paragraph({ text, children: [new TextRun({ text, bold: true, color: "FFFFFF" })] })],
+                    children: [new Paragraph({ children: [new TextRun({ text, bold: true, color: "FFFFFF" })] })],
                     shading: { fill: "EBA000" },
                 })
             ),
@@ -1321,7 +1360,6 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
             spacing: { after: 200 },
         }),
         new Paragraph({
-            text: "Project Details",
             heading: "Heading3",
             spacing: { after: 150, before: 150 },
             children: [
@@ -1400,7 +1438,6 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
     await yieldToMain();
     children.push(
         new Paragraph({
-            text: "Snag List Summary",
             spacing: { after: 200, before: 200 },
             children: [
                 new TextRun({
@@ -1485,9 +1522,16 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
                 }
                 
                 if (!planImage) continue;
+
+                const planSnagsWithMarkers = snapshotsForPlan.filter(
+                    (s) => s.plan_x != null && s.plan_y != null
+                );
+                const annotatedPlan = planSnagsWithMarkers.length > 0
+                    ? await overlayPlanMarkers(planImage, planSnagsWithMarkers, snagIndexMap)
+                    : planImage;
                 
                 // Compress to 0.7 quality at 800px max (as specified)
-                const compressedPlan = await downscaleImage(planImage, 800, 0.7);
+                const compressedPlan = await downscaleImage(annotatedPlan, 800, 0.7);
                 const planImageData = extractBase64Image(compressedPlan);
                 if (!planImageData) continue;
                 const planImageBytes = base64ToUint8Array(planImageData.base64);
@@ -1495,7 +1539,6 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
                 // Add floor plan page
                 children.push(
                     new Paragraph({
-                        text: `Floor Plan - Page ${planInfo.page}`,
                         spacing: { before: 200, after: 150 },
                         children: [
                             new TextRun({
