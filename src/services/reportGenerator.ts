@@ -315,6 +315,15 @@ const extractBase64Image = (dataUrl: string): { base64: string; type: "jpg" | "p
     return { base64: match[2], type };
 };
 
+const base64ToUint8Array = (base64: string): Uint8Array => {
+    const binaryString = atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes;
+};
+
 // Helper function to format status and priority with color codes
 export const getStatusColor = (status?: string): [number, number, number] => {
     const colors: Record<string, [number, number, number]> = {
@@ -1481,6 +1490,7 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
                 const compressedPlan = await downscaleImage(planImage, 800, 0.7);
                 const planImageData = extractBase64Image(compressedPlan);
                 if (!planImageData) continue;
+                const planImageBytes = base64ToUint8Array(planImageData.base64);
                 
                 // Add floor plan page
                 children.push(
@@ -1500,7 +1510,7 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
                     new Paragraph({
                         children: [
                             new ImageRun({
-                                data: planImageData.base64,
+                                data: planImageBytes,
                                 type: planImageData.type,
                                 transformation: {
                                     width: 750,
@@ -1607,6 +1617,7 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
                 const normalizedPhoto = await downscaleImage(photoDataUrl, 1200, 0.78);
                 const photoImageData = extractBase64Image(normalizedPhoto);
                 if (!photoImageData) throw new Error('Invalid photo data URL');
+                const photoImageBytes = base64ToUint8Array(photoImageData.base64);
 
                 snagDetails.push(
                     new Paragraph({
@@ -1616,7 +1627,7 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
                     new Paragraph({
                         children: [
                             new ImageRun({
-                                data: photoImageData.base64,
+                                data: photoImageBytes,
                                 type: photoImageData.type,
                                 transformation: {
                                     width: 250,
