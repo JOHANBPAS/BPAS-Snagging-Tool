@@ -1478,7 +1478,8 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
         }],
     });
 
-    const blob = await Packer.toBlob(doc);
+    const buffer = await Packer.toBuffer(doc);
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
     const fileName = formatFileName(project).replace('.pdf', '.docx');
     return { blob, fileName };
 };
