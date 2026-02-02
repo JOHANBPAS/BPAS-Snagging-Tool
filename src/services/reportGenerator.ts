@@ -1188,7 +1188,7 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
                 }),
             ],
         }),
-        new PageBreak(),
+        new Paragraph({ children: [new PageBreak()] }),
     );
     // === EXECUTIVE SUMMARY ===
 
@@ -1390,7 +1390,7 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
             ],
             spacing: { after: 100 },
         })] : []),
-        new PageBreak()
+        new Paragraph({ children: [new PageBreak()] })
     );
 
     onProgress?.('Generating snag list...');
@@ -1444,7 +1444,7 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
             rows: tableRows,
             width: { size: 100, type: WidthType.PERCENTAGE },
         }),
-        new PageBreak()
+        new Paragraph({ children: [new PageBreak()] })
     );
 
     // === FLOOR PLANS ===
@@ -1551,7 +1551,7 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
                     );
                 });
                 
-                children.push(new PageBreak());
+                children.push(new Paragraph({ children: [new PageBreak()] }));
                 await yieldToMain();
                 
             } catch (err) {
@@ -1650,7 +1650,7 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
 
     // === BACK PAGE WITH COMPANY DETAILS ===
     children.push(
-        new PageBreak(),
+        new Paragraph({ children: [new PageBreak()] }),
         new Paragraph({
             text: "Report prepared by:",
             spacing: { after: 100 },
