@@ -307,16 +307,6 @@ const createLocationSnippet = async (
 
 const yieldToMain = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-// Helper to convert base64 string to Uint8Array for docx ImageRun (browser compatible)
-const base64ToUint8Array = (base64: string): Uint8Array => {
-    const binaryString = atob(base64);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-    }
-    return bytes;
-};
-
 // Helper function to format status and priority with color codes
 export const getStatusColor = (status?: string): [number, number, number] => {
     const colors: Record<string, [number, number, number]> = {
@@ -1481,8 +1471,6 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
                 
                 // Compress to 0.7 quality at 800px max (as specified)
                 const compressedPlan = await downscaleImage(planImage, 800, 0.7);
-                const base64Plan = compressedPlan.replace(/^data:image\/[^;]+;base64,/, '');
-                const planImageData = base64ToUint8Array(base64Plan);
                 
                 // Add floor plan page
                 children.push(
@@ -1502,8 +1490,8 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
                     new Paragraph({
                         children: [
                             new ImageRun({
-                                data: planImageData,
-                                type: 'png',
+                                data: compressedPlan,
+                                type: 'jpg',
                                 transformation: {
                                     width: 750,
                                     height: 500,
@@ -1606,8 +1594,6 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
         // Add photo if available
         if (photoDataUrl) {
             try {
-                const base64Photo = photoDataUrl.replace(/^data:image\/[^;]+;base64,/, '');
-                const photoImageData = base64ToUint8Array(base64Photo);
                 snagDetails.push(
                     new Paragraph({
                         children: [new TextRun({ text: "Photo:", bold: true })],
@@ -1616,8 +1602,8 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
                     new Paragraph({
                         children: [
                             new ImageRun({
-                                data: photoImageData,
-                                type: 'png',
+                                data: photoDataUrl,
+                                type: 'jpg',
                                 transformation: {
                                     width: 250,
                                     height: 180,
