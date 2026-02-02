@@ -307,7 +307,7 @@ const createLocationSnippet = async (
 const yieldToMain = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 // Helper function to format status and priority with color codes
-const getStatusColor = (status?: string): [number, number, number] => {
+export const getStatusColor = (status?: string): [number, number, number] => {
     const colors: Record<string, [number, number, number]> = {
         open: [239, 68, 68],        // Red
         in_progress: [249, 115, 22], // Orange
@@ -317,7 +317,7 @@ const getStatusColor = (status?: string): [number, number, number] => {
     return colors[status || 'open'] || [107, 114, 128];
 };
 
-const getPriorityColor = (priority?: string): [number, number, number] => {
+export const getPriorityColor = (priority?: string): [number, number, number] => {
     const colors: Record<string, [number, number, number]> = {
         critical: [239, 68, 68],     // Red
         high: [249, 115, 22],         // Orange
@@ -1022,7 +1022,23 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
     onProgress?.('Initializing Word report...');
     await yieldToMain();
 
-    const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, AlignmentType, PageBreak } = await import('docx');
+    const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, AlignmentType, PageBreak, ImageRun } = await import('docx');
+
+    // Photo fetching helper - gets newest photo for a snag (sorted descending by created_at)
+    const getNewestSnagPhotoDataUrl = async (projectId: string, snagId: string): Promise<string | null> => {
+        try {
+            const photos = await getSnagPhotos(projectId, snagId);
+            if (photos.length === 0) return null;
+            
+            const newestPhoto = photos[0];
+            if (!newestPhoto.photo_url) return null;
+            
+            return await toDataUrl(newestPhoto.photo_url);
+        } catch (err) {
+            console.warn(`Failed to fetch photo for snag ${snagId}:`, err);
+            return null;
+        }
+    };
 
     const sortedSnags = [...snags].sort((a, b) => {
         if (a.plan_id !== b.plan_id) return (a.plan_id || '').localeCompare(b.plan_id || '');
@@ -1375,6 +1391,117 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
         new PageBreak()
     );
 
+    // === FLOOR PLANS ===
+    onProgress?.('Rendering floor plans...');
+    await yieldToMain();
+    
+    try {
+        // Get unique plans from snags that have plan references
+        const plansToRender = Array.from(new Map(
+            sortedSnags
+                .filter(s => s.plan_id)
+                .map(s => [s.plan_id, { plan_id: s.plan_id, page: s.plan_page ?? 1 }])
+        ).values());
+
+        for (const planInfo of plansToRender) {
+            try {
+                const snapshotsForPlan = sortedSnags.filter(
+                    s => s.plan_id === planInfo.plan_id && (s.plan_page ?? 1) === planInfo.page
+                );
+                
+                if (snapshotsForPlan.length === 0) continue;
+                
+                onProgress?.(`Rendering plan page ${planInfo.page}...`);
+                
+                // Get plan file
+                const plans = await getProjectPlans(project.id);
+                const planRecord = plans.find(p => p.id === planInfo.plan_id);
+                if (!planRecord?.file_url) continue;
+                
+                // Get plan image
+                let planImage: string | null = null;
+                if (planRecord.file_type === 'pdf') {
+                    // For PDFs, render the specific page
+                    planImage = await renderPDFPageToImage(planRecord.file_url, planInfo.page, 800);
+                } else {
+                    // For images, use directly
+                    planImage = await toDataUrl(planRecord.file_url);
+                }
+                
+                if (!planImage) continue;
+                
+                // Compress to 0.7 quality at 800px max (as specified)
+                const compressedPlan = await downscaleImage(planImage, 800, 0.7);
+                const base64Plan = compressedPlan.replace(/^data:image\/[^;]+;base64,/, '');
+                
+                // Add floor plan page
+                children.push(
+                    new Paragraph({
+                        text: `Floor Plan - Page ${planInfo.page}`,
+                        spacing: { before: 200, after: 150 },
+                        children: [
+                            new TextRun({
+                                text: `Floor Plan - Page ${planInfo.page}`,
+                                size: 32,
+                                bold: true,
+                                color: "121212",
+                                font: "Syne",
+                            }),
+                        ],
+                    }),
+                    new Paragraph({
+                        children: [
+                            new ImageRun({
+                                data: base64Plan,
+                                type: 'image/jpeg',
+                                width: { px: 750 },
+                                height: { px: 500 },
+                            }),
+                        ],
+                        spacing: { after: 200 },
+                    })
+                );
+                
+                // Add marker legend
+                children.push(
+                    new Paragraph({
+                        children: [new TextRun({ text: "Snag Markers (Color by Priority):", bold: true })],
+                        spacing: { after: 100 },
+                    })
+                );
+                
+                // Legend entries
+                const priorityLegend = [
+                    { priority: 'critical', desc: 'Critical (Red)' },
+                    { priority: 'high', desc: 'High (Orange)' },
+                    { priority: 'medium', desc: 'Medium (Blue)' },
+                    { priority: 'low', desc: 'Low (Green)' },
+                ];
+                
+                // Add marker info for snags on this plan
+                snapshotsForPlan.forEach((snag) => {
+                    const idx = snagIndexMap.get(snag.id) || 0;
+                    const priorityDesc = priorityLegend.find(p => p.priority === snag.priority)?.desc || 'Unknown';
+                    
+                    children.push(
+                        new Paragraph({
+                            text: `${idx}. ${snag.title} (${priorityDesc})`,
+                            spacing: { after: 50 },
+                        })
+                    );
+                });
+                
+                children.push(new PageBreak());
+                await yieldToMain();
+                
+            } catch (err) {
+                console.warn(`Failed to render plan ${planInfo.plan_id}:`, err);
+            }
+        }
+    } catch (err) {
+        console.warn('Floor plan rendering error:', err);
+    }
+
     onProgress?.('Processing snag details...');
     await yieldToMain();
     children.push(
@@ -1387,8 +1514,9 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
 
     for (const snag of sortedSnags) {
         const globalIndex = snagIndexMap.get(snag.id) || 0;
+        const photoDataUrl = await getNewestSnagPhotoDataUrl(project.id, snag.id);
 
-        children.push(
+        const snagDetails: any[] = [
             new Paragraph({
                 text: `${globalIndex}. ${snag.title}`,
                 heading: "Heading2",
@@ -1409,18 +1537,49 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
                 ],
                 spacing: { after: 100 },
             }),
-            ...(snag.description
-                ? [
+        ];
+
+        if (snag.description) {
+            snagDetails.push(
+                new Paragraph({
+                    children: [
+                        new TextRun({ text: "Description: ", bold: true }),
+                        new TextRun(snag.description),
+                    ],
+                    spacing: { after: 150 },
+                })
+            );
+        }
+
+        // Add photo if available
+        if (photoDataUrl) {
+            try {
+                const base64Photo = photoDataUrl.replace(/^data:image\/[^;]+;base64,/, '');
+                snagDetails.push(
+                    new Paragraph({
+                        children: [new TextRun({ text: "Photo:", bold: true })],
+                        spacing: { before: 100, after: 50 },
+                    }),
                     new Paragraph({
                         children: [
-                            new TextRun({ text: "Description: ", bold: true }),
-                            new TextRun(snag.description),
+                            new ImageRun({
+                                data: base64Photo,
+                                type: 'image/jpeg',
+                                width: { px: 250 },
+                                height: { px: 180 },
+                            }),
                         ],
                         spacing: { after: 150 },
-                    }),
-                ]
-                : []),
-        );
+                    })
+                );
+            } catch (err) {
+                console.warn(`Failed to embed photo for snag ${snag.id}:`, err);
+            }
+        }
+
+        children.push(...snagDetails);
+        onProgress?.(`Processing snag ${globalIndex} of ${sortedSnags.length}...`);
+        await yieldToMain();
     }
 
     // === BACK PAGE WITH COMPANY DETAILS ===

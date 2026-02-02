@@ -64,6 +64,12 @@ npm run dev
 
 The dev server runs at http://localhost:5173.
 
+## Testing
+
+- Run tests once (non-watch): `npm run test:run`
+- Run tests in watch mode: `npm test`
+- Emulator-dependent tests auto-skip if Firebase Emulator Suite is not running.
+
 ## Workflows
 
 - **Auth**: login/register/forgot-password screens connect to Firebase Auth. User profiles are stored in Firestore with `full_name`, `email`, and `role` fields. Admin role detected via custom claims.

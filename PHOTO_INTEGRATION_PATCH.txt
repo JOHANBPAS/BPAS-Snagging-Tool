@@ -1,0 +1,28 @@
+// PATCH: Add ImageRun import and photo helper to generateWordReport
+// File: src/services/reportGenerator.ts
+// Location: After line 1024 (after yieldToMain)
+
+// REPLACE THIS LINE:
+// const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, AlignmentType, PageBreak } = await import('docx');
+
+// WITH THIS:
+const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, AlignmentType, PageBreak, ImageRun } = await import('docx');
+
+// ADD AFTER THE IMPORT (before sortedSnags):
+// Photo fetching helper - gets newest photo for a snag
+const getNewestSnagPhotoDataUrl = async (projectId: string, snagId: string): Promise<string | null> => {
+    try {
+        const photos = await getSnagPhotos(projectId, snagId);
+        if (photos.length === 0) return null;
+        
+        // Photos are already sorted descending by created_at (newest first)
+        const newestPhoto = photos[0];
+        if (!newestPhoto.photo_url) return null;
+        
+        // Convert to data URL for Word embedding
+        return await toDataUrl(newestPhoto.photo_url);
+    } catch (err) {
+        console.warn(`Failed to fetch photo for snag ${snagId}:`, err);
+        return null;
+    }
+};

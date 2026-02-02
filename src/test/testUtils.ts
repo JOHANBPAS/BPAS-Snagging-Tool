@@ -1,5 +1,4 @@
 import { Firestore, collection, writeBatch, doc } from 'firebase/firestore';
-import { v4 as uuidv4 } from 'crypto';
 
 /**
  * Firebase test utilities for setting up mock data
@@ -35,6 +34,13 @@ export interface MockPhoto {
   created_at: string;
 }
 
+const createId = (): string => {
+  if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID();
+  }
+  return `test-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
+
 /**
  * Create mock project data
  */
@@ -42,7 +48,7 @@ export function createMockProject(
   overrides?: Partial<MockProject>
 ): MockProject {
   return {
-    id: uuidv4(),
+    id: createId(),
     name: 'Test Project',
     client: 'Test Client',
     address: '123 Test Street',
@@ -59,7 +65,7 @@ export function createMockSnag(
   overrides?: Partial<MockSnag>
 ): MockSnag {
   return {
-    id: uuidv4(),
+    id: createId(),
     project_id: projectId,
     title: 'Test Snag',
     status: 'open',
@@ -78,7 +84,7 @@ export function createMockPhoto(
   overrides?: Partial<MockPhoto>
 ): MockPhoto {
   return {
-    id: uuidv4(),
+    id: createId(),
     snag_id: snagId,
     photo_url: 'data:image/jpeg;base64,test-base64-encoded-image',
     created_at: new Date().toISOString(),
