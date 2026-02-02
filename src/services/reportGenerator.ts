@@ -1040,6 +1040,15 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
     onProgress?.('Initializing Word report...');
     await yieldToMain();
 
+    const normalizePlanCoord = (value: number | string | null | undefined): number | null => {
+        if (value == null) return null;
+        const parsed = typeof value === 'string' ? parseFloat(value.replace(',', '.')) : value;
+        if (!Number.isFinite(parsed)) return null;
+        const normalized = parsed > 1 ? parsed / 100 : parsed;
+        if (!Number.isFinite(normalized)) return null;
+        return Math.min(1, Math.max(0, normalized));
+    };
+
     // PDF page to image renderer for Word reports
     const renderPDFPageToImage = async (pdfUrl: string, pageNum: number, maxSize: number): Promise<string | null> => {
         try {
@@ -1112,15 +1121,6 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
 
                 ctx.drawImage(img, 0, 0, img.width, img.height);
 
-                const normalizePlanCoord = (value: number | string | null | undefined): number | null => {
-                    if (value == null) return null;
-                    const parsed = typeof value === 'string' ? parseFloat(value.replace(',', '.')) : value;
-                    if (!Number.isFinite(parsed)) return null;
-                    const normalized = parsed > 1 ? parsed / 100 : parsed;
-                    if (!Number.isFinite(normalized)) return null;
-                    return Math.min(1, Math.max(0, normalized));
-                };
-
                 planSnags.forEach((snag) => {
                     const xNorm = normalizePlanCoord(snag.plan_x as number | string | null | undefined);
                     const yNorm = normalizePlanCoord(snag.plan_y as number | string | null | undefined);
@@ -1130,18 +1130,18 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
                     const [r, g, b] = getPriorityColor(snag.priority);
 
                     ctx.beginPath();
-                    ctx.arc(x, y, 10, 0, 2 * Math.PI);
+                    ctx.arc(x, y, 14, 0, 2 * Math.PI);
                     ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
                     ctx.fill();
 
-                    ctx.lineWidth = 2;
+                    ctx.lineWidth = 3;
                     ctx.strokeStyle = '#ffffff';
                     ctx.stroke();
 
                     const idx = indexMap.get(snag.id);
                     if (idx != null) {
                         ctx.fillStyle = '#ffffff';
-                        ctx.font = 'bold 10px Arial, sans-serif';
+                        ctx.font = 'bold 12px Arial, sans-serif';
                         ctx.textAlign = 'center';
                         ctx.textBaseline = 'middle';
                         ctx.fillText(String(idx), x, y);
@@ -1164,6 +1164,50 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
 
     const snagIndexMap = new Map<string, number>();
     sortedSnags.forEach((s, i) => snagIndexMap.set(s.id, i + 1));
+
+    const planImageCache = new Map<string, string>();
+    let projectPlansCache: Awaited<ReturnType<typeof getProjectPlans>> | null = null;
+
+    const getPlans = async () => {
+        if (!projectPlansCache) {
+            projectPlansCache = await getProjectPlans(project.id);
+        }
+        return projectPlansCache;
+    };
+
+    const getPlanCacheKey = (planId: string, page: number) => `${planId}:${page}`;
+
+    const getPlanImageForSnag = async (snag: Snag): Promise<string | null> => {
+        const planId = snag.plan_id ?? 'legacy';
+        const page = snag.plan_page ?? 1;
+        const cacheKey = getPlanCacheKey(planId, page);
+        if (planImageCache.has(cacheKey)) return planImageCache.get(cacheKey) || null;
+
+        let planImage: string | null = null;
+        if (planId === 'legacy') {
+            if (!project.plan_image_url) return null;
+            if (project.plan_image_url.toLowerCase().endsWith('.pdf')) {
+                planImage = await renderPDFPageToImage(project.plan_image_url, page, 1200);
+            } else {
+                planImage = await toDataUrl(project.plan_image_url);
+            }
+        } else {
+            const plans = await getPlans();
+            const planRecord = plans.find(p => p.id === planId);
+            if (!planRecord?.url) return null;
+            if (planRecord.url.toLowerCase().endsWith('.pdf')) {
+                planImage = await renderPDFPageToImage(planRecord.url, page, 1200);
+            } else {
+                planImage = await toDataUrl(planRecord.url);
+            }
+        }
+
+        if (planImage) {
+            planImageCache.set(cacheKey, planImage);
+        }
+
+        return planImage;
+    };
 
     const children: any[] = [];
 
@@ -1518,7 +1562,7 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
                 onProgress?.(`Rendering plan page ${planInfo.page}...`);
                 
                 // Get plan file
-                const plans = await getProjectPlans(project.id);
+                const plans = await getPlans();
                 const planRecord = plans.find(p => p.id === planInfo.plan_id);
                 if (!planRecord?.url) continue;
                 
@@ -1534,29 +1578,21 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
                 
                 if (!planImage) continue;
 
-                const normalizePlanCoord = (value: number | string | null | undefined): number | null => {
-                    if (value == null) return null;
-                    const parsed = typeof value === 'string' ? parseFloat(value.replace(',', '.')) : value;
-                    if (!Number.isFinite(parsed)) return null;
-                    const normalized = parsed > 1 ? parsed / 100 : parsed;
-                    if (!Number.isFinite(normalized)) return null;
-                    return Math.min(1, Math.max(0, normalized));
-                };
-
                 const planSnagsWithMarkers = snapshotsForPlan.filter((s) => {
                     const xNorm = normalizePlanCoord(s.plan_x as number | string | null | undefined);
                     const yNorm = normalizePlanCoord(s.plan_y as number | string | null | undefined);
                     return xNorm != null && yNorm != null;
                 });
-                const annotatedPlan = planSnagsWithMarkers.length > 0
-                    ? await overlayPlanMarkers(planImage, planSnagsWithMarkers, snagIndexMap)
-                    : planImage;
                 
                 // Compress to 0.7 quality at 800px max (as specified)
-                const compressedPlan = await downscaleImage(annotatedPlan, 800, 0.7);
-                const planImageData = extractBase64Image(compressedPlan);
+                const compressedBase = await downscaleImage(planImage, 800, 0.7);
+                const annotatedPlan = planSnagsWithMarkers.length > 0
+                    ? await overlayPlanMarkers(compressedBase, planSnagsWithMarkers, snagIndexMap)
+                    : compressedBase;
+                const planImageData = extractBase64Image(annotatedPlan);
                 if (!planImageData) continue;
                 const planImageBytes = base64ToUint8Array(planImageData.base64);
+                planImageCache.set(getPlanCacheKey(planInfo.plan_id, planInfo.page), planImage);
                 
                 // Add floor plan page
                 children.push(
@@ -1616,85 +1652,6 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
                     );
                 });
 
-                const snagsWithCoords = snapshotsForPlan.filter((snag) => {
-                    const xNorm = normalizePlanCoord(snag.plan_x as number | string | null | undefined);
-                    const yNorm = normalizePlanCoord(snag.plan_y as number | string | null | undefined);
-                    return xNorm != null && yNorm != null;
-                });
-
-                if (snagsWithCoords.length > 0) {
-                    children.push(
-                        new Paragraph({
-                            children: [new TextRun({ text: "Location Snippets:", bold: true })],
-                            spacing: { before: 150, after: 100 },
-                        })
-                    );
-
-                    const snippetCells: TableCell[] = [];
-
-                    for (const snag of snagsWithCoords) {
-                        const idx = snagIndexMap.get(snag.id) || 0;
-                        const xNorm = normalizePlanCoord(snag.plan_x as number | string | null | undefined);
-                        const yNorm = normalizePlanCoord(snag.plan_y as number | string | null | undefined);
-                        if (xNorm == null || yNorm == null) continue;
-
-                        const snippet = await createLocationSnippet(
-                            planImage,
-                            xNorm,
-                            yNorm,
-                            idx,
-                            200
-                        );
-
-                        if (!snippet) continue;
-
-                        const snippetData = extractBase64Image(snippet);
-                        if (!snippetData) continue;
-
-                        const snippetBytes = base64ToUint8Array(snippetData.base64);
-
-                        snippetCells.push(
-                            new TableCell({
-                                children: [
-                                    new Paragraph({
-                                        children: [new TextRun({ text: `${idx}. ${snag.title}`, bold: true })],
-                                        spacing: { after: 50 },
-                                    }),
-                                    new Paragraph({
-                                        children: [
-                                            new ImageRun({
-                                                data: snippetBytes,
-                                                type: snippetData.type,
-                                                transformation: {
-                                                    width: 160,
-                                                    height: 160,
-                                                },
-                                            }),
-                                        ],
-                                    }),
-                                ],
-                            })
-                        );
-                    }
-
-                    if (snippetCells.length > 0) {
-                        const snippetRows: TableRow[] = [];
-                        for (let i = 0; i < snippetCells.length; i += 2) {
-                            snippetRows.push(
-                                new TableRow({
-                                    children: snippetCells.slice(i, i + 2),
-                                })
-                            );
-                        }
-
-                        children.push(
-                            new Table({
-                                rows: snippetRows,
-                                width: { size: 100, type: WidthType.PERCENTAGE },
-                            })
-                        );
-                    }
-                }
                 
                 children.push(new Paragraph({ children: [new PageBreak()] }));
                 await yieldToMain();
@@ -1754,6 +1711,48 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
                     spacing: { after: 150 },
                 })
             );
+        }
+
+        const xNorm = normalizePlanCoord(snag.plan_x as number | string | null | undefined);
+        const yNorm = normalizePlanCoord(snag.plan_y as number | string | null | undefined);
+        if (xNorm != null && yNorm != null) {
+            const planImageForSnippet = await getPlanImageForSnag(snag);
+            if (planImageForSnippet) {
+                try {
+                    const locationSnippet = await createLocationSnippet(
+                        planImageForSnippet,
+                        xNorm,
+                        yNorm,
+                        globalIndex,
+                        220
+                    );
+
+                    if (locationSnippet) {
+                        const snippetData = extractBase64Image(locationSnippet);
+                        if (snippetData) {
+                            const snippetBytes = base64ToUint8Array(snippetData.base64);
+                            snagDetails.push(
+                                new Paragraph({
+                                    children: [new TextRun({ text: "Location Snippet:", bold: true })],
+                                    spacing: { before: 100, after: 50 },
+                                }),
+                                new Paragraph({
+                                    children: [
+                                        new ImageRun({
+                                            data: snippetBytes,
+                                            type: snippetData.type,
+                                            transformation: { width: 200, height: 200 },
+                                        }),
+                                    ],
+                                    spacing: { after: 150 },
+                                })
+                            );
+                        }
+                    }
+                } catch (err) {
+                    console.warn(`Failed to embed location snippet for snag ${snag.id}:`, err);
+                }
+            }
         }
 
         // Add photo if available
