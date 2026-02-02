@@ -100,7 +100,12 @@ const AuthGate: React.FC = () => {
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-full bg-gradient-to-r from-transparent via-white/5 to-transparent opacity-50 animate-pulse animation-delay-1000" />
         </div>
       </div>
-      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/95 p-6 shadow-2xl relative z-10\">\n        <div className=\"mb-4 text-center space-y-1\">\n          <p className=\"text-xs uppercase tracking-[0.3em] text-bpas-grey font-syne\">bpas architects</p>\n          <h1 className=\"text-2xl font-syne font-semibold text-bpas-black\">\n            {mode === 'login' ? shuffledText : 'Create your account'}\n          </h1>
+      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/95 p-6 shadow-2xl relative z-10">
+        <div className="mb-4 text-center space-y-1">
+          <p className="text-xs uppercase tracking-[0.3em] text-bpas-grey font-syne">bpas architects</p>
+          <h1 className="text-2xl font-syne font-semibold text-bpas-black">
+            {mode === 'login' ? shuffledText : 'Create your account'}
+          </h1>
           <div className="mx-auto h-0.5 w-12 bg-bpas-yellow" />
           <p className="text-sm font-raleway text-bpas-grey">
             {mode === 'login'
