@@ -1416,17 +1416,13 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
                 // Get plan file
                 const plans = await getProjectPlans(project.id);
                 const planRecord = plans.find(p => p.id === planInfo.plan_id);
-                if (!planRecord?.file_url) continue;
+                if (!planRecord?.url) continue;
                 
-                // Get plan image
+                // Get plan image (for now, only support images, not PDFs)
                 let planImage: string | null = null;
-                if (planRecord.file_type === 'pdf') {
-                    // For PDFs, render the specific page
-                    planImage = await renderPDFPageToImage(planRecord.file_url, planInfo.page, 800);
-                } else {
-                    // For images, use directly
-                    planImage = await toDataUrl(planRecord.file_url);
-                }
+                // TODO: Add PDF page rendering support with pdfjs-dist
+                // For now, assume it's an image
+                planImage = await toDataUrl(planRecord.url);
                 
                 if (!planImage) continue;
                 
@@ -1453,9 +1449,11 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
                         children: [
                             new ImageRun({
                                 data: base64Plan,
-                                type: 'image/jpeg',
-                                width: { px: 750 },
-                                height: { px: 500 },
+                                type: 'jpg',
+                                transformation: {
+                                    width: 750,
+                                    height: 500,
+                                },
                             }),
                         ],
                         spacing: { after: 200 },
@@ -1564,9 +1562,11 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
                         children: [
                             new ImageRun({
                                 data: base64Photo,
-                                type: 'image/jpeg',
-                                width: { px: 250 },
-                                height: { px: 180 },
+                                type: 'jpg',
+                                transformation: {
+                                    width: 250,
+                                    height: 180,
+                                },
                             }),
                         ],
                         spacing: { after: 150 },
