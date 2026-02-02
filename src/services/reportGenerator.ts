@@ -1112,10 +1112,21 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
 
                 ctx.drawImage(img, 0, 0, img.width, img.height);
 
+                const normalizePlanCoord = (value: number | string | null | undefined): number | null => {
+                    if (value == null) return null;
+                    const parsed = typeof value === 'string' ? parseFloat(value.replace(',', '.')) : value;
+                    if (!Number.isFinite(parsed)) return null;
+                    const normalized = parsed > 1 ? parsed / 100 : parsed;
+                    if (!Number.isFinite(normalized)) return null;
+                    return Math.min(1, Math.max(0, normalized));
+                };
+
                 planSnags.forEach((snag) => {
-                    if (snag.plan_x == null || snag.plan_y == null) return;
-                    const x = snag.plan_x * img.width;
-                    const y = snag.plan_y * img.height;
+                    const xNorm = normalizePlanCoord(snag.plan_x as number | string | null | undefined);
+                    const yNorm = normalizePlanCoord(snag.plan_y as number | string | null | undefined);
+                    if (xNorm == null || yNorm == null) return;
+                    const x = xNorm * img.width;
+                    const y = yNorm * img.height;
                     const [r, g, b] = getPriorityColor(snag.priority);
 
                     ctx.beginPath();
@@ -1523,9 +1534,20 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
                 
                 if (!planImage) continue;
 
-                const planSnagsWithMarkers = snapshotsForPlan.filter(
-                    (s) => s.plan_x != null && s.plan_y != null
-                );
+                const normalizePlanCoord = (value: number | string | null | undefined): number | null => {
+                    if (value == null) return null;
+                    const parsed = typeof value === 'string' ? parseFloat(value.replace(',', '.')) : value;
+                    if (!Number.isFinite(parsed)) return null;
+                    const normalized = parsed > 1 ? parsed / 100 : parsed;
+                    if (!Number.isFinite(normalized)) return null;
+                    return Math.min(1, Math.max(0, normalized));
+                };
+
+                const planSnagsWithMarkers = snapshotsForPlan.filter((s) => {
+                    const xNorm = normalizePlanCoord(s.plan_x as number | string | null | undefined);
+                    const yNorm = normalizePlanCoord(s.plan_y as number | string | null | undefined);
+                    return xNorm != null && yNorm != null;
+                });
                 const annotatedPlan = planSnagsWithMarkers.length > 0
                     ? await overlayPlanMarkers(planImage, planSnagsWithMarkers, snagIndexMap)
                     : planImage;
@@ -1594,9 +1616,11 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
                     );
                 });
 
-                const snagsWithCoords = snapshotsForPlan.filter(
-                    (snag) => snag.plan_x != null && snag.plan_y != null
-                );
+                const snagsWithCoords = snapshotsForPlan.filter((snag) => {
+                    const xNorm = normalizePlanCoord(snag.plan_x as number | string | null | undefined);
+                    const yNorm = normalizePlanCoord(snag.plan_y as number | string | null | undefined);
+                    return xNorm != null && yNorm != null;
+                });
 
                 if (snagsWithCoords.length > 0) {
                     children.push(
@@ -1610,10 +1634,14 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
 
                     for (const snag of snagsWithCoords) {
                         const idx = snagIndexMap.get(snag.id) || 0;
+                        const xNorm = normalizePlanCoord(snag.plan_x as number | string | null | undefined);
+                        const yNorm = normalizePlanCoord(snag.plan_y as number | string | null | undefined);
+                        if (xNorm == null || yNorm == null) continue;
+
                         const snippet = await createLocationSnippet(
                             planImage,
-                            snag.plan_x as number,
-                            snag.plan_y as number,
+                            xNorm,
+                            yNorm,
                             idx,
                             200
                         );
