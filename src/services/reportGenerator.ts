@@ -1003,7 +1003,7 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
     onProgress?.('Initializing Word report...');
     await yieldToMain();
 
-    const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, ImageRun, Header, Footer, AlignmentType, PageBreak, BorderStyle } = await import('docx');
+    const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, AlignmentType, PageBreak } = await import('docx');
 
     const sortedSnags = [...snags].sort((a, b) => {
         if (a.plan_id !== b.plan_id) return (a.plan_id || '').localeCompare(b.plan_id || '');
@@ -1180,87 +1180,6 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
         new PageBreak()
     );
 
-    onProgress?.('Processing floor plans...');
-    await yieldToMain();
-    const floorPlans = await getFloorPlans(project, sortedSnags, onProgress);
-
-    if (floorPlans.length > 0) {
-        children.push(
-            new Paragraph({
-                text: "Floor Plans",
-                heading: "Heading1",
-                spacing: { after: 200 },
-            })
-        );
-
-        for (const plan of floorPlans) {
-            const img = new Image();
-            img.src = plan.image;
-            await new Promise((resolve) => (img.onload = resolve));
-
-            const canvas = document.createElement('canvas');
-            canvas.width = img.width;
-            canvas.height = img.height;
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-                ctx.drawImage(img, 0, 0);
-
-                const pinsForFloor = sortedSnags.filter((snag) => {
-                    const matchesPlan = snag.plan_id ? snag.plan_id === plan.planId : (plan.planId === 'legacy');
-                    return matchesPlan && (snag.plan_page ?? 1) === plan.page;
-                });
-
-                pinsForFloor.forEach((snag) => {
-                    if (snag.plan_x != null && snag.plan_y != null) {
-                        const x = img.width * snag.plan_x;
-                        const y = img.height * snag.plan_y;
-                        const priorityColor = getPriorityColor(snag.priority);
-
-                        ctx.beginPath();
-                        ctx.arc(x, y, Math.max(img.width * 0.01, 10), 0, 2 * Math.PI);
-                        ctx.fillStyle = `rgba(${priorityColor[0]}, ${priorityColor[1]}, ${priorityColor[2]}, 0.8)`;
-                        ctx.fill();
-                        ctx.strokeStyle = 'white';
-                        ctx.lineWidth = 2;
-                        ctx.stroke();
-
-                        const globalIndex = snagIndexMap.get(snag.id) || 0;
-                        ctx.fillStyle = 'white';
-                        ctx.font = `bold ${Math.max(img.width * 0.012, 12)}px Arial`;
-                        ctx.textAlign = 'center';
-                        ctx.textBaseline = 'middle';
-                        ctx.fillText(String(globalIndex), x, y);
-                    }
-                });
-
-                const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.8));
-                if (blob) {
-                    const buffer = await blob.arrayBuffer();
-                    const uint8Array = new Uint8Array(buffer);
-                    children.push(
-                        new Paragraph({
-                            text: `${plan.name} - Page ${plan.page}`,
-                            heading: "Heading3",
-                            spacing: { before: 200, after: 100 },
-                        }),
-                        new Paragraph({
-                            children: [
-                                new ImageRun({
-                                    data: uint8Array,
-                                    transformation: {
-                                        width: 600,
-                                        height: 600 * (img.height / img.width),
-                                    },
-                                } as any),
-                            ],
-                        })
-                    );
-                }
-            }
-        }
-        children.push(new PageBreak());
-    }
-
     onProgress?.('Generating snag list...');
     await yieldToMain();
     children.push(
@@ -1305,7 +1224,7 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
         new PageBreak()
     );
 
-    onProgress?.('Processing snag details with photos...');
+    onProgress?.('Processing snag details...');
     await yieldToMain();
     children.push(
         new Paragraph({
@@ -1315,112 +1234,42 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
         })
     );
 
-    const BATCH_SIZE = 5;
-    for (let i = 0; i < sortedSnags.length; i += BATCH_SIZE) {
-        const batch = sortedSnags.slice(i, i + BATCH_SIZE);
-        const batchResults = await Promise.all(batch.map(async (snag) => {
-            onProgress?.(`Fetching photos for snag ${snagIndexMap.get(snag.id)}...`);
+    for (const snag of sortedSnags) {
+        const globalIndex = snagIndexMap.get(snag.id) || 0;
 
-            const photoRows = await getSnagPhotos(project.id, snag.id);
-            const photos: ArrayBuffer[] = [];
-
-            if (photoRows && photoRows.length > 0) {
-                const photoPromises = photoRows.slice(0, 2).map(async (row) => {
-                    if (!row.photo_url) return null;
-                    try {
-                        const url = new URL(row.photo_url);
-                        url.searchParams.append('t', Date.now().toString());
-                        const res = await fetch(url.toString(), { mode: 'cors', credentials: 'omit', cache: 'no-store' });
-                        if (res.ok) return await res.arrayBuffer();
-                        console.warn(`Word Report: Failed to fetch photo ${row.photo_url}`, res.status);
-                        return null;
-                    } catch (e) {
-                        console.error(`Word Report: Error fetching photo ${row.photo_url}`, e);
-                        return null;
-                    }
-                });
-                const results = await Promise.all(photoPromises);
-                photos.push(...(results.filter(Boolean) as ArrayBuffer[]));
-            }
-
-            let locationSnippet: ArrayBuffer | null = null;
-            if (snag.plan_x != null && snag.plan_y != null) {
-                const plan = floorPlans.find(p => {
-                    const matchesPlan = snag.plan_id ? snag.plan_id === p.planId : (p.planId === 'legacy');
-                    return matchesPlan && p.page === (snag.plan_page ?? 1);
-                });
-
-                if (plan) {
-                    const globalIndex = snagIndexMap.get(snag.id) || 0;
-                    const snippetDataUrl = await createLocationSnippet(plan.image, snag.plan_x, snag.plan_y, globalIndex);
-                    if (snippetDataUrl) {
-                        const res = await fetch(snippetDataUrl);
-                        if (res.ok) locationSnippet = await res.arrayBuffer();
-                    }
-                }
-            }
-
-            return { snag, photos, locationSnippet };
-        }));
-
-        for (const { snag, photos, locationSnippet } of batchResults) {
-            const globalIndex = snagIndexMap.get(snag.id) || 0;
-
-            children.push(
-                new Paragraph({
-                    text: `${globalIndex}. ${snag.title}`,
-                    heading: "Heading2",
-                    spacing: { before: 200, after: 100 },
-                }),
-                new Paragraph({
-                    children: [
-                        new TextRun({ text: "Status: ", bold: true }),
-                        new TextRun(snag.status || 'open'),
-                        new TextRun({ text: " | Priority: ", bold: true }),
-                        new TextRun(snag.priority || 'medium'),
-                        new TextRun({ text: " | Location: ", bold: true }),
-                        new TextRun(formatFieldValue(snag.location)),
-                        ...(snag.due_date ? [
-                            new TextRun({ text: " | Due: ", bold: true }),
-                            new TextRun(snag.due_date),
-                        ] : []),
-                    ],
-                    spacing: { after: 100 },
-                }),
-                ...(snag.description
-                    ? [
-                        new Paragraph({
-                            children: [
-                                new TextRun({ text: "Description: ", bold: true }),
-                                new TextRun(snag.description),
-                            ],
-                            spacing: { after: 150 },
-                        }),
-                    ]
-                    : []),
-            );
-
-            const images: any[] = [];
-            if (locationSnippet) {
-                images.push(new ImageRun({
-                    data: new Uint8Array(locationSnippet),
-                    transformation: { width: 200, height: 200 },
-                } as any));
-            }
-            photos.forEach(photo => {
-                images.push(new ImageRun({
-                    data: new Uint8Array(photo),
-                    transformation: { width: 200, height: 200 },
-                } as any));
-            });
-
-            if (images.length > 0) {
-                children.push(new Paragraph({ children: images, spacing: { after: 150 } }));
-            } else {
-                children.push(new Paragraph({ text: "No photos attached.", style: "Italic", spacing: { after: 150 } }));
-            }
-        }
-        await yieldToMain();
+        children.push(
+            new Paragraph({
+                text: `${globalIndex}. ${snag.title}`,
+                heading: "Heading2",
+                spacing: { before: 200, after: 100 },
+            }),
+            new Paragraph({
+                children: [
+                    new TextRun({ text: "Status: ", bold: true }),
+                    new TextRun(snag.status || 'open'),
+                    new TextRun({ text: " | Priority: ", bold: true }),
+                    new TextRun(snag.priority || 'medium'),
+                    new TextRun({ text: " | Location: ", bold: true }),
+                    new TextRun(formatFieldValue(snag.location)),
+                    ...(snag.due_date ? [
+                        new TextRun({ text: " | Due: ", bold: true }),
+                        new TextRun(snag.due_date),
+                    ] : []),
+                ],
+                spacing: { after: 100 },
+            }),
+            ...(snag.description
+                ? [
+                    new Paragraph({
+                        children: [
+                            new TextRun({ text: "Description: ", bold: true }),
+                            new TextRun(snag.description),
+                        ],
+                        spacing: { after: 150 },
+                    }),
+                ]
+                : []),
+        );
     }
 
     // === BACK PAGE WITH COMPANY DETAILS ===
@@ -1474,7 +1323,6 @@ export const generateWordReport = async ({ project, snags, onProgress }: ReportG
     onProgress?.('Finalizing Word document...');
     const doc = new Document({
         sections: [{
-            properties: {},
             children: children,
         }],
     });
