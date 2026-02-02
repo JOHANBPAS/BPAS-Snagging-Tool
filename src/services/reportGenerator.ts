@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, AlignmentType, PageBreak, ImageRun } from 'docx';
 import { brandAssets, brandColors } from '../lib/brand';
 import { getProjectPlans, getSnagPhotos } from './dataService';
 import { Project, Snag } from '../types';
@@ -1022,7 +1023,45 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
     onProgress?.('Initializing Word report...');
     await yieldToMain();
 
-    const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, AlignmentType, PageBreak, ImageRun } = await import('docx');
+    // PDF page to image renderer for Word reports
+    const renderPDFPageToImage = async (pdfUrl: string, pageNum: number, maxSize: number): Promise<string | null> => {
+        try {
+            const pdfjsModule = await import('pdfjs-dist');
+            const pdfJS = pdfjsModule.default || pdfjsModule;
+            
+            if (!pdfJS.GlobalWorkerOptions.workerSrc) {
+                pdfJS.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@4.8.69/build/pdf.worker.min.mjs';
+            }
+            
+            const url = new URL(pdfUrl);
+            url.searchParams.append('t', Date.now().toString());
+            const response = await fetch(url.toString(), { mode: 'cors', credentials: 'omit', cache: 'no-store' });
+            
+            if (!response.ok) return null;
+            
+            const buffer = await response.arrayBuffer();
+            const pdf = await pdfJS.getDocument({ data: buffer }).promise;
+            
+            if (pageNum > pdf.numPages) return null;
+            
+            const page = await pdf.getPage(pageNum);
+            const scale = maxSize / Math.max(page.getViewport({ scale: 1 }).width, page.getViewport({ scale: 1 }).height);
+            const viewport = page.getViewport({ scale });
+            
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            if (!context) return null;
+            
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            
+            await page.render({ canvasContext: context, viewport }).promise;
+            return canvas.toDataURL('image/jpeg', 0.85);
+        } catch (err) {
+            console.warn(`Failed to render PDF page ${pageNum}:`, err);
+            return null;
+        }
+    };
 
     // Photo fetching helper - gets newest photo for a snag (sorted descending by created_at)
     const getNewestSnagPhotoDataUrl = async (projectId: string, snagId: string): Promise<string | null> => {
@@ -1418,11 +1457,15 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
                 const planRecord = plans.find(p => p.id === planInfo.plan_id);
                 if (!planRecord?.url) continue;
                 
-                // Get plan image (for now, only support images, not PDFs)
+                // Get plan image (support both PDF and image plans)
                 let planImage: string | null = null;
-                // TODO: Add PDF page rendering support with pdfjs-dist
-                // For now, assume it's an image
-                planImage = await toDataUrl(planRecord.url);
+                if (planRecord.url.toLowerCase().endsWith('.pdf')) {
+                    // For PDFs, render the specific page
+                    planImage = await renderPDFPageToImage(planRecord.url, planInfo.page, 800);
+                } else {
+                    // For images, use directly
+                    planImage = await toDataUrl(planRecord.url);
+                }
                 
                 if (!planImage) continue;
                 
