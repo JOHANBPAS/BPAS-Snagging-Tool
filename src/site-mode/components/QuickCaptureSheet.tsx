@@ -5,12 +5,14 @@ export interface QuickCaptureDraft {
   description?: string;
   priority?: "low" | "med" | "high" | "critical";
   assigneeId?: string;
+  location?: string;
 }
 
 interface QuickCaptureSheetProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (draft: QuickCaptureDraft) => void;
+  initialDraft?: QuickCaptureDraft;
   onPhotoCapture: () => void;
   photoCount?: number;
   photoPreviews?: string[];
@@ -21,6 +23,7 @@ export const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({
   isOpen,
   onClose,
   onSave,
+  initialDraft,
   onPhotoCapture,
   photoCount = 0,
   photoPreviews = [],
@@ -29,10 +32,12 @@ export const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({
   const [draft, setDraft] = useState<QuickCaptureDraft>({});
 
   React.useEffect(() => {
-    if (!isOpen) {
+    if (isOpen) {
+      setDraft(initialDraft ?? {});
+    } else {
       setDraft({});
     }
-  }, [isOpen]);
+  }, [isOpen, initialDraft]);
 
   const handleSave = () => {
     onSave(draft);
@@ -49,12 +54,21 @@ export const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({
           style={styles.input}
           placeholder="Title (optional)"
           onChange={(event) => setDraft((prev) => ({ ...prev, title: event.target.value }))}
+          value={draft.title ?? ""}
         />
 
         <input
           style={styles.input}
           placeholder="Description"
           onChange={(event) => setDraft((prev) => ({ ...prev, description: event.target.value }))}
+          value={draft.description ?? ""}
+        />
+
+        <input
+          style={styles.input}
+          placeholder="Location"
+          onChange={(event) => setDraft((prev) => ({ ...prev, location: event.target.value }))}
+          value={draft.location ?? ""}
         />
 
         <div style={styles.row}>
@@ -66,6 +80,7 @@ export const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({
                 ...(draft.priority === p ? styles.chipSelected : {}),
               }}
               onClick={() => setDraft((prev) => ({ ...prev, priority: p }))}
+              type="button"
             >
               {p.toUpperCase()}
             </button>

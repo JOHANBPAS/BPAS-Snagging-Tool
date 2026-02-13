@@ -134,7 +134,7 @@ const SiteMode: React.FC = () => {
     setPlacePinMode(false);
   };
 
-  const handleSave = async (draft: { title?: string; description?: string; priority?: "low" | "med" | "high" | "critical"; assigneeId?: string }) => {
+  const handleSave = async (draft: { title?: string; description?: string; priority?: "low" | "med" | "high" | "critical"; assigneeId?: string; location?: string }) => {
     if (editingSnagId) {
       await handleSaveEdit(draft);
       return;
@@ -149,6 +149,7 @@ const SiteMode: React.FC = () => {
         priority: (draft.priority || 'medium') as SnagPriority,
         status: 'open',
         assigned_to: draft.assigneeId || null,
+        location: draft.location?.trim() || null,
         plan_x: pendingCoord?.x ?? null,
         plan_y: pendingCoord?.y ?? null,
         plan_page: 1,
@@ -198,7 +199,7 @@ const SiteMode: React.FC = () => {
     }
   };
 
-  const handleSaveEdit = async (draft: { title?: string; description?: string; priority?: "low" | "med" | "high" | "critical"; assigneeId?: string }) => {
+  const handleSaveEdit = async (draft: { title?: string; description?: string; priority?: "low" | "med" | "high" | "critical"; assigneeId?: string; location?: string }) => {
     if (!editingSnagId || !projectId) return;
 
     try {
@@ -206,7 +207,8 @@ const SiteMode: React.FC = () => {
         title: draft.title?.trim() || "Untitled snag",
         description: draft.description?.trim() || null,
         priority: (draft.priority || 'medium') as SnagPriority,
-        assigned_to: draft.assigneeId || null
+        assigned_to: draft.assigneeId || null,
+        location: draft.location?.trim() || null
       });
 
       // Photos for edit
@@ -331,6 +333,19 @@ const SiteMode: React.FC = () => {
       return !snag.plan_id || snag.plan_id === planId;
     })
     .map((snag) => ({ id: snag.id, x: snag.plan_x!, y: snag.plan_y! }));
+
+  const editingSnag = editingSnagId ? snags.find((snag) => snag.id === editingSnagId) : undefined;
+  const editingDraft = editingSnag
+    ? {
+        title: editingSnag.title,
+        description: editingSnag.description ?? undefined,
+        priority:
+          editingSnag.priority === "medium"
+            ? "med"
+            : (editingSnag.priority as "low" | "high" | "critical"),
+        location: editingSnag.location ?? undefined,
+      }
+    : undefined;
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
@@ -539,6 +554,7 @@ const SiteMode: React.FC = () => {
           setEditingSnagPhotoPreviews([]);
         }}
         onSave={handleSave}
+        initialDraft={editingDraft}
         onPhotoCapture={openPhotoPicker}
         photoCount={editingSnagId ? editingSnagPhotos.length : pendingPhotos.length}
         photoPreviews={editingSnagId ? editingSnagPhotoPreviews : pendingPhotoPreviews}

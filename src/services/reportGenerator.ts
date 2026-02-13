@@ -679,9 +679,7 @@ export const generateReport = async ({ project, snags, onProgress, generatedBy }
             4: { halign: 'center', cellWidth: 45 },
             5: { halign: 'right', cellWidth: 60 },
         },
-        body: [...snags]
-            .sort((a, b) => (snagIndexMap.get(a.id) || 0) - (snagIndexMap.get(b.id) || 0))
-            .map((snag) => [
+        body: sortedSnags.map((snag) => [
                 String(snagIndexMap.get(snag.id) || '-'),
                 snag.title,
                 formatFieldValue(snag.location),
@@ -1501,9 +1499,7 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
             ),
             tableHeader: true,
         }),
-        ...snags
-            .sort((a, b) => (snagIndexMap.get(a.id) || 0) - (snagIndexMap.get(b.id) || 0))
-            .map(snag =>
+        ...sortedSnags.map(snag =>
                 new TableRow({
                     children: [
                         String(snagIndexMap.get(snag.id) || '-'),
