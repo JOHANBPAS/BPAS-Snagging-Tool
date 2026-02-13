@@ -46,6 +46,20 @@ export default defineConfig({
             },
           },
           {
+            urlPattern: /^https:\/\/firebasestorage\.googleapis\.com\/v0\/b\/.*\/o\/plans%2F.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'plans-cache',
+              expiration: {
+                maxEntries: 50,
+                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+          {
             urlPattern: /^https:\/\/storage\.googleapis\.com\/.*\.appspot\.com\/plans\/.*/i,
             handler: 'CacheFirst',
             options: {

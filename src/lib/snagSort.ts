@@ -13,3 +13,9 @@ export const sortSnagsByCreatedAtDesc = (snags: Snag[]): Snag[] =>
     if (aTime !== bTime) return bTime - aTime;
     return a.id.localeCompare(b.id);
   });
+
+export const sortSnagsWithFriendlyIds = (snags: Snag[]): Snag[] =>
+  sortSnagsByCreatedAtDesc(snags).map((snag, index) => ({
+    ...snag,
+    friendly_id: index + 1,
+  }));

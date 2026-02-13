@@ -8,7 +8,8 @@ import { SnagManager } from '../components/project/SnagManager';
 import { EditProjectModal } from '../components/project/EditProjectModal';
 import { DeleteProjectModal } from '../components/project/DeleteProjectModal';
 import { useAuth } from '../hooks/useAuth';
-import { getProject, getProjectSnags, getChecklistFields, getUsers } from '../services/dataService';
+import { getProject, subscribeToProjectSnags, getChecklistFields, getUsers } from '../services/dataService';
+import { sortSnagsWithFriendlyIds } from '../lib/snagSort';
 
 export const ProjectDetail: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>();
@@ -40,25 +41,18 @@ export const ProjectDetail: React.FC = () => {
     }
   };
 
-  const fetchSnags = async () => {
-    if (!projectId) return;
-    try {
-      const snagsData = await getProjectSnags(projectId);
-      // Add friendly_id if missing (or we rely on dataService to invoke it?)
-      // The original code did index + 1 mapping on fetch. We can keep doing that.
-      const snagsWithId = snagsData.map((s, index) => ({
-        ...s,
-        friendly_id: index + 1
-      }));
-      setSnags(snagsWithId);
-    } catch (err) {
-      console.error("Error fetching snags", err);
-    }
-  };
-
   useEffect(() => {
     fetchProject();
-    fetchSnags();
+  }, [projectId]);
+
+  useEffect(() => {
+    if (!projectId) return;
+
+    const unsubscribe = subscribeToProjectSnags(projectId, (snagsData) => {
+      setSnags(sortSnagsWithFriendlyIds(snagsData));
+    });
+
+    return () => unsubscribe();
   }, [projectId]);
 
   const [contractors, setContractors] = useState<any[]>([]);
@@ -179,7 +173,7 @@ export const ProjectDetail: React.FC = () => {
           setEditCoords(null);
           setCreateCoords(null);
         }}
-        onSnagChange={fetchSnags}
+        onSnagChange={() => {}}
         contractors={contractors}
       />
 

@@ -1,4 +1,5 @@
 
+import { ProjectPlan } from '../types';
 import { getProjectSnags, getProjectPlans } from './dataService';
 
 // Basic implementation
@@ -18,4 +19,37 @@ export const cacheProjectAssets = async (projectIds: string[], onProgress?: (mes
         p++;
     }
     if (onProgress) onProgress("Done", 100);
+};
+
+export const preloadProjectPlans = async (
+    plans: ProjectPlan[],
+    onProgress?: (current: number, total: number) => void
+) => {
+    if (!('caches' in window)) return;
+
+    const cache = await caches.open('plans-cache');
+    const total = plans.length;
+    let current = 0;
+
+    for (const plan of plans) {
+        current += 1;
+        onProgress?.(current, total);
+
+        try {
+            const existing = await cache.match(plan.url, { ignoreSearch: false });
+            if (existing) continue;
+
+            const response = await fetch(plan.url, {
+                mode: 'cors',
+                credentials: 'omit',
+                cache: 'reload',
+            });
+
+            if (!response.ok) continue;
+
+            await cache.put(plan.url, response.clone());
+        } catch (error) {
+            console.warn('Failed to cache plan', plan.url, error);
+        }
+    }
 };

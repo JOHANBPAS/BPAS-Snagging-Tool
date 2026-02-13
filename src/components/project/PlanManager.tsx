@@ -3,9 +3,8 @@ import { PlanViewer } from '../PlanViewer';
 import { useAuth } from '../../hooks/useAuth';
 import { Project, Snag, ProjectPlan } from '../../types';
 import { FileUpload } from '../uploads/FileUpload';
-import { getProjectPlans, addProjectPlan, deleteProjectPlan, updateProject, updateSnag, getProjectSnags } from '../../services/dataService';
-
-// import { preloadProjectPlans } from '../../services/offlineService';
+import { getProjectPlans, addProjectPlan, deleteProjectPlan, updateProject, updateSnag } from '../../services/dataService';
+import { preloadProjectPlans } from '../../services/offlineService';
 
 interface Props {
     project: Project;
@@ -125,11 +124,10 @@ export const PlanManager: React.FC<Props> = ({
         setDownloadProgress({ current: 0, total: plans.length });
 
         try {
-            // Offline logic disabled for migration phase
-            // await preloadProjectPlans(plans, (current, total) => {
-            //     setDownloadProgress({ current, total });
-            // });
-            alert('Plans downloaded for offline use (Simulation).');
+            await preloadProjectPlans(plans, (current, total) => {
+                setDownloadProgress({ current, total });
+            });
+            alert('Plans downloaded for offline use.');
         } catch (error) {
             console.error('Error downloading plans:', error);
             alert('Failed to download plans.');
