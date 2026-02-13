@@ -291,24 +291,14 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
             panning={{
               velocityDisabled: true,
             }}
-            limitToBounds={true}
-            minPositionX={panBounds.minX}
-            minPositionY={panBounds.minY}
-            maxPositionX={panBounds.maxX}
-            maxPositionY={panBounds.maxY}
-            centerZoomedOut
+            limitToBounds={false}
             doubleClick={{ disabled: true }}
             onTransformed={(ref, state) => {
-              const newTransform = {
+              setCurrentTransform({
                 positionX: state.positionX,
                 positionY: state.positionY,
                 scale: state.scale,
-              };
-              setCurrentTransform(newTransform);
-              // Recalculate pan bounds when zoom level changes
-              if (state.scale !== currentTransform.scale) {
-                calculatePanBounds(state.scale);
-              }
+              });
             }}
           >
             {({ zoomIn, zoomOut, resetTransform }) => (
