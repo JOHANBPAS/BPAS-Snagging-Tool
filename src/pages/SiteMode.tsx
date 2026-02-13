@@ -245,22 +245,6 @@ const SiteMode: React.FC = () => {
     }
   };
 
-  const handleVoice = async () => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      return window.prompt("Voice unavailable. Type a description instead.") ?? null;
-    }
-    return new Promise<string | null>((resolve) => {
-      const recognition = new SpeechRecognition();
-      recognition.lang = "en-US";
-      recognition.interimResults = false;
-      recognition.maxAlternatives = 1;
-      recognition.onresult = (event: any) => resolve(event.results?.[0]?.[0]?.transcript ?? null);
-      recognition.onerror = () => resolve(null);
-      recognition.start();
-    });
-  };
-
   const handleEditSnag = (snag: Snag) => {
     setEditingSnagId(snag.id);
     setEditingSnagPhotos([]);
@@ -555,7 +539,6 @@ const SiteMode: React.FC = () => {
           setEditingSnagPhotoPreviews([]);
         }}
         onSave={handleSave}
-        onVoiceToText={handleVoice}
         onPhotoCapture={openPhotoPicker}
         photoCount={editingSnagId ? editingSnagPhotos.length : pendingPhotos.length}
         photoPreviews={editingSnagId ? editingSnagPhotoPreviews : pendingPhotoPreviews}

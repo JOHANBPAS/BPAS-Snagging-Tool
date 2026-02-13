@@ -11,7 +11,6 @@ interface QuickCaptureSheetProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (draft: QuickCaptureDraft) => void;
-  onVoiceToText: () => Promise<string | null> | string | null;
   onPhotoCapture: () => void;
   photoCount?: number;
   photoPreviews?: string[];
@@ -22,7 +21,6 @@ export const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({
   isOpen,
   onClose,
   onSave,
-  onVoiceToText,
   onPhotoCapture,
   photoCount = 0,
   photoPreviews = [],
@@ -41,15 +39,6 @@ export const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({
     onClose();
   };
 
-  const handleVoice = async () => {
-    const text = await onVoiceToText();
-    if (!text) return;
-    setDraft((prev) => ({
-      ...prev,
-      description: prev.description ? `${prev.description} ${text}` : text,
-    }));
-  };
-
   return (
     <div style={{ display: isOpen ? "block" : "none" }}>
       <div style={styles.overlay} onClick={onClose} />
@@ -62,16 +51,11 @@ export const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({
           onChange={(event) => setDraft((prev) => ({ ...prev, title: event.target.value }))}
         />
 
-        <div style={styles.row}>
-          <input
-            style={{ ...styles.input, ...styles.flex }}
-            placeholder="Description"
-            onChange={(event) => setDraft((prev) => ({ ...prev, description: event.target.value }))}
-          />
-          <button style={styles.voiceButton} onClick={handleVoice}>
-            Voice
-          </button>
-        </div>
+        <input
+          style={styles.input}
+          placeholder="Description"
+          onChange={(event) => setDraft((prev) => ({ ...prev, description: event.target.value }))}
+        />
 
         <div style={styles.row}>
           {(["low", "med", "high", "critical"] as const).map((p) => (
@@ -163,15 +147,6 @@ const styles: Record<string, React.CSSProperties> = {
   },
   flex: {
     flex: 1,
-  },
-  voiceButton: {
-    height: 52,
-    padding: "0 16px",
-    backgroundColor: "#FFD400",
-    color: "#0A0A0A",
-    border: "none",
-    borderRadius: 8,
-    fontWeight: 700,
   },
   chip: {
     height: 44,
