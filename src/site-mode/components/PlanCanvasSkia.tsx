@@ -36,6 +36,9 @@ export const PlanCanvasSkia: React.FC<PlanCanvasSkiaProps> = ({
   const [zoomLevel, setZoomLevel] = useState(100);
   const [panBounds, setPanBounds] = useState<PanBounds>({ minX: -100, minY: -100, maxX: 100, maxY: 100 });
   const imageRef = useRef<HTMLImageElement | null>(null);
+  
+  // Use 2x DPI for sharp rendering on zoom
+  const dpiScale = 2;
 
   const calculatePanBounds = useCallback(
     (img: HTMLImageElement | null, zoomScale: number = 1) => {
@@ -113,6 +116,10 @@ export const PlanCanvasSkia: React.FC<PlanCanvasSkiaProps> = ({
     img.src = imageUri;
     img.onload = () => {
       imageRef.current = img;
+      // Set canvas resolution with DPI scale on image load
+      canvas.width = size.width * dpiScale;
+      canvas.height = size.height * dpiScale;
+      ctx.scale(dpiScale, dpiScale);
       calculatePanBounds(img, 1);
       draw(ctx, img);
     };
@@ -125,18 +132,9 @@ export const PlanCanvasSkia: React.FC<PlanCanvasSkiaProps> = ({
       img.onload = null;
       img.onerror = null;
     };
-  }, [draw, imageUri, calculatePanBounds]);
+  }, [draw, imageUri, calculatePanBounds, size.width, size.height, dpiScale]);
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    const img = imageRef.current;
-    if (img && img.complete) {
-      draw(ctx, img);
-    }
-  }, [draw, imageUri, size.height, size.width]);
+
 
   useEffect(() => {
     const container = containerRef.current;
@@ -146,6 +144,7 @@ export const PlanCanvasSkia: React.FC<PlanCanvasSkiaProps> = ({
       if (entry) {
         const { width, height } = entry.contentRect;
         if (width > 0 && height > 0) {
+          // Store CSS size, canvas will be rendered at 2x
           setSize({ width, height });
           // Recalculate bounds on resize
           calculatePanBounds(imageRef.current);
@@ -155,6 +154,23 @@ export const PlanCanvasSkia: React.FC<PlanCanvasSkiaProps> = ({
     observer.observe(container);
     return () => observer.disconnect();
   }, [calculatePanBounds]);
+
+  // Redraw when size or dpiScale changes
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const img = imageRef.current;
+    if (img && img.complete) {
+      // Set canvas resolution with DPI scale
+      canvas.width = size.width * dpiScale;
+      canvas.height = size.height * dpiScale;
+      // Scale context to match DPI
+      ctx.scale(dpiScale, dpiScale);
+      draw(ctx, img);
+    }
+  }, [size, dpiScale, draw]);
 
   const handleClick = useCallback(
     (event: React.MouseEvent<HTMLCanvasElement>) => {
@@ -214,7 +230,7 @@ export const PlanCanvasSkia: React.FC<PlanCanvasSkiaProps> = ({
   );
 
   const canvasStyle = useMemo(
-    () => ({ width: "100%", height: "100%", display: "block" }),
+    () => ({ width: "100%", height: "100%", display: "block", imageRendering: "crisp-edges" }),
     []
   );
 
@@ -248,8 +264,8 @@ export const PlanCanvasSkia: React.FC<PlanCanvasSkiaProps> = ({
           <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }}>
             <canvas
               ref={canvasRef}
-              width={size.width}
-              height={size.height}
+              width={size.width * dpiScale}
+              height={size.height * dpiScale}
               style={canvasStyle}
               onClick={handleClick}
             />

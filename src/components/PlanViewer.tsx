@@ -57,25 +57,35 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
       return;
     }
 
-    // Calculate image dimensions at the current zoom scale
-    const imageWidth = planDimensions.width * zoomScale;
-    const imageHeight = planDimensions.height * zoomScale;
-
-    // Calculate center position
-    const centerX = (containerWidth - imageWidth) / 2;
-    const centerY = (containerHeight - imageHeight) / 2;
-
-    // Allow panning to see the entire image
-    const minX = centerX - containerWidth;
-    const maxX = centerX + containerWidth;
-    const minY = centerY - containerHeight;
-    const maxY = centerY + containerHeight;
-
+    // Calculate how much space is available for panning at current zoom scale
+    // When at zoom level 1, the image fits in the container
+    // At zoom > 1, the image is larger and can pan
+    // At zoom < 1, the image is smaller
+    
+    // Calculate the effective rendered image size at this zoom level
+    const aspect = planDimensions.width / planDimensions.height;
+    let renderedWidth = containerWidth;
+    let renderedHeight = containerWidth / aspect;
+    
+    if (renderedHeight > containerHeight) {
+      renderedHeight = containerHeight;
+      renderedWidth = containerHeight * aspect;
+    }
+    
+    // Scale by current zoom
+    const scaledWidth = renderedWidth * zoomScale;
+    const scaledHeight = renderedHeight * zoomScale;
+    
+    // Calculate how much we can pan in each direction
+    // Allow panning so the entire image can be viewed
+    const maxPanX = Math.max(0, (scaledWidth - containerWidth) / 2);
+    const maxPanY = Math.max(0, (scaledHeight - containerHeight) / 2);
+    
     setPanBounds({
-      minX,
-      minY,
-      maxX,
-      maxY,
+      minX: -maxPanX,
+      minY: -maxPanY,
+      maxX: maxPanX,
+      maxY: maxPanY,
     });
   };
 
