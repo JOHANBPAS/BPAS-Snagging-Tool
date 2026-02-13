@@ -42,9 +42,9 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
   const currentPageNumber = totalPages ? currentPage + 1 : 1;
 
   // Calculate pan bounds based on container and content dimensions
-  const calculatePanBounds = () => {
+  const calculatePanBounds = (zoomScale: number = currentTransform.scale) => {
     if (!containerRef.current || !planDimensions) {
-      setPanBounds({ minX: -1000, minY: -1000, maxX: 1000, maxY: 1000 });
+      setPanBounds({ minX: -10000, minY: -10000, maxX: 10000, maxY: 10000 });
       return;
     }
 
@@ -53,37 +53,29 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
     const containerHeight = containerRect.height;
 
     if (containerWidth <= 0 || containerHeight <= 0 || planDimensions.width <= 0 || planDimensions.height <= 0) {
-      setPanBounds({ minX: -1000, minY: -1000, maxX: 1000, maxY: 1000 });
+      setPanBounds({ minX: -10000, minY: -10000, maxX: 10000, maxY: 10000 });
       return;
     }
 
-    // Calculate aspect ratio and scaling
-    const containerAspect = containerWidth / containerHeight;
-    const contentAspect = planDimensions.width / planDimensions.height;
+    // Calculate image dimensions at the current zoom scale
+    const imageWidth = planDimensions.width * zoomScale;
+    const imageHeight = planDimensions.height * zoomScale;
 
-    let scaledWidth = planDimensions.width;
-    let scaledHeight = planDimensions.height;
+    // Calculate center position
+    const centerX = (containerWidth - imageWidth) / 2;
+    const centerY = (containerHeight - imageHeight) / 2;
 
-    // Scale content to fit container while maintaining aspect ratio
-    if (contentAspect > containerAspect) {
-      scaledWidth = containerWidth;
-      scaledHeight = containerWidth / contentAspect;
-    } else {
-      scaledHeight = containerHeight;
-      scaledWidth = containerHeight * contentAspect;
-    }
-
-    // Calculate bounds to allow showing the full image while preventing over-pan
-    const maxPanX = Math.max(0, scaledWidth - containerWidth / 2);
-    const maxPanY = Math.max(0, scaledHeight - containerHeight / 2);
-    const minPanX = -maxPanX;
-    const minPanY = -maxPanY;
+    // Allow panning to see the entire image
+    const minX = centerX - containerWidth;
+    const maxX = centerX + containerWidth;
+    const minY = centerY - containerHeight;
+    const maxY = centerY + containerHeight;
 
     setPanBounds({
-      minX: minPanX,
-      minY: minPanY,
-      maxX: maxPanX,
-      maxY: maxPanY,
+      minX,
+      minY,
+      maxX,
+      maxY,
     });
   };
 
@@ -311,11 +303,16 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
             centerZoomedOut
             doubleClick={{ disabled: true }}
             onTransformed={(ref, state) => {
-              setCurrentTransform({
+              const newTransform = {
                 positionX: state.positionX,
                 positionY: state.positionY,
                 scale: state.scale,
-              });
+              };
+              setCurrentTransform(newTransform);
+              // Recalculate pan bounds when zoom level changes
+              if (state.scale !== currentTransform.scale) {
+                calculatePanBounds(state.scale);
+              }
             }}
           >
             {({ zoomIn, zoomOut, resetTransform }) => (

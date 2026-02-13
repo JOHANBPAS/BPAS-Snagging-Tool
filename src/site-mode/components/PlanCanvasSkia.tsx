@@ -38,30 +38,36 @@ export const PlanCanvasSkia: React.FC<PlanCanvasSkiaProps> = ({
   const imageRef = useRef<HTMLImageElement | null>(null);
 
   const calculatePanBounds = useCallback(
-    (img: HTMLImageElement | null) => {
+    (img: HTMLImageElement | null, zoomScale: number = 1) => {
       if (!img || size.width <= 0 || size.height <= 0) {
-        setPanBounds({ minX: -100, minY: -100, maxX: 100, maxY: 100 });
+        setPanBounds({ minX: -10000, minY: -10000, maxX: 10000, maxY: 10000 });
         return;
       }
 
-      const scale = Math.min(size.width / img.width, size.height / img.height);
-      const imageWidth = img.width * scale;
-      const imageHeight = img.height * scale;
-      const imageX = (size.width - imageWidth) / 2;
-      const imageY = (size.height - imageHeight) / 2;
+      // Calculate image dimensions at the current zoom scale
+      const imageWidth = img.width * zoomScale;
+      const imageHeight = img.height * zoomScale;
 
-      // Calculate bounds to allow showing the full image while preventing over-pan
-      // Negative values allow panning image left/up, positive values allow panning right/down
-      const minX = -(imageWidth - size.width / 2);
-      const minY = -(imageHeight - size.height / 2);
-      const maxX = imageX + size.width / 2;
-      const maxY = imageY + size.height / 2;
+      // Calculate bounds to allow panning to see any part of the image
+      // At a given zoom level, we want to allow panning so that:
+      // - The image can be moved to show its right/bottom edges
+      // - The image can be moved to show its left/top edges
+      
+      // When centered at this zoom, image starts at:
+      const centerX = (size.width - imageWidth) / 2;
+      const centerY = (size.height - imageHeight) / 2;
+
+      // Bounds allow panning from showing left edge to right edge
+      const minX = centerX - size.width;
+      const maxX = centerX + size.width;
+      const minY = centerY - size.height;
+      const maxY = centerY + size.height;
 
       setPanBounds({
-        minX: Math.min(minX, 0),
-        minY: Math.min(minY, 0),
-        maxX: Math.max(maxX, 0),
-        maxY: Math.max(maxY, 0),
+        minX,
+        minY,
+        maxX,
+        maxY,
       });
     },
     [size.width, size.height]
@@ -107,12 +113,12 @@ export const PlanCanvasSkia: React.FC<PlanCanvasSkiaProps> = ({
     img.src = imageUri;
     img.onload = () => {
       imageRef.current = img;
-      calculatePanBounds(img);
+      calculatePanBounds(img, 1);
       draw(ctx, img);
     };
     img.onerror = () => {
       imageRef.current = null;
-      calculatePanBounds(null);
+      calculatePanBounds(null, 1);
       draw(ctx, null);
     };
     return () => {
@@ -228,7 +234,10 @@ export const PlanCanvasSkia: React.FC<PlanCanvasSkiaProps> = ({
       maxPositionX={panBounds.maxX}
       maxPositionY={panBounds.maxY}
       onZoom={(e) => {
-        setZoomLevel(Math.round(e.state.scale * 100));
+        const newScale = e.state.scale;
+        setZoomLevel(Math.round(newScale * 100));
+        // Recalculate pan bounds based on new zoom level
+        calculatePanBounds(imageRef.current, newScale);
       }}
       onTransformed={(ref) => {
         transformRef.current = ref;
