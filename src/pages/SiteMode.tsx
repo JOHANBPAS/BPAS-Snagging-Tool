@@ -13,7 +13,7 @@ import {
 } from "../services/dataService";
 import type { Project, ProjectPlan, Snag, SnagStatus, SnagPriority } from "../types";
 import { PlanCanvasSkia } from "../site-mode/components/PlanCanvasSkia";
-import { QuickCaptureSheet } from "../site-mode/components/QuickCaptureSheet";
+import { QuickCaptureSheet, type QuickCaptureDraft } from "../site-mode/components/QuickCaptureSheet";
 import { useAuth } from "../hooks/useAuth";
 
 const SiteMode: React.FC = () => {
@@ -134,7 +134,12 @@ const SiteMode: React.FC = () => {
     setPlacePinMode(false);
   };
 
-  const handleSave = async (draft: { title?: string; description?: string; priority?: "low" | "med" | "high" | "critical"; assigneeId?: string; location?: string }) => {
+  const mapDraftPriority = (priority?: QuickCaptureDraft["priority"]): SnagPriority => {
+    if (!priority || priority === "med") return "medium";
+    return priority;
+  };
+
+  const handleSave = async (draft: QuickCaptureDraft) => {
     if (editingSnagId) {
       await handleSaveEdit(draft);
       return;
@@ -146,7 +151,7 @@ const SiteMode: React.FC = () => {
       const newSnagId = await createSnag(projectId, {
         title: draft.title?.trim() || "Untitled snag",
         description: draft.description?.trim() || null,
-        priority: (draft.priority || 'medium') as SnagPriority,
+        priority: mapDraftPriority(draft.priority),
         status: 'open',
         assigned_to: draft.assigneeId || null,
         location: draft.location?.trim() || null,
@@ -154,7 +159,6 @@ const SiteMode: React.FC = () => {
         plan_y: pendingCoord?.y ?? null,
         plan_page: 1,
         plan_id: planId,
-        location: null,
         category: null,
         due_date: null,
         created_by: user?.uid || null
@@ -199,14 +203,14 @@ const SiteMode: React.FC = () => {
     }
   };
 
-  const handleSaveEdit = async (draft: { title?: string; description?: string; priority?: "low" | "med" | "high" | "critical"; assigneeId?: string; location?: string }) => {
+  const handleSaveEdit = async (draft: QuickCaptureDraft) => {
     if (!editingSnagId || !projectId) return;
 
     try {
       await updateSnag(projectId, editingSnagId, {
         title: draft.title?.trim() || "Untitled snag",
         description: draft.description?.trim() || null,
-        priority: (draft.priority || 'medium') as SnagPriority,
+        priority: mapDraftPriority(draft.priority),
         assigned_to: draft.assigneeId || null,
         location: draft.location?.trim() || null
       });
@@ -335,7 +339,7 @@ const SiteMode: React.FC = () => {
     .map((snag) => ({ id: snag.id, x: snag.plan_x!, y: snag.plan_y! }));
 
   const editingSnag = editingSnagId ? snags.find((snag) => snag.id === editingSnagId) : undefined;
-  const editingDraft = editingSnag
+  const editingDraft: QuickCaptureDraft | undefined = editingSnag
     ? {
         title: editingSnag.title,
         description: editingSnag.description ?? undefined,
