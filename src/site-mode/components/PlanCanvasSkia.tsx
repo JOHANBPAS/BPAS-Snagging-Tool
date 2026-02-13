@@ -7,6 +7,13 @@ export interface PlanPin {
   y: number; // 0..1
 }
 
+interface PanBounds {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
 interface PlanCanvasSkiaProps {
   imageUri: string;
   pins: PlanPin[];
@@ -24,10 +31,41 @@ export const PlanCanvasSkia: React.FC<PlanCanvasSkiaProps> = ({
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const transformRef = useRef<{ scale: number }>({ scale: 1 });
+  const transformRef = useRef<any>(null);
   const [size, setSize] = useState({ width: 1, height: 1 });
   const [zoomLevel, setZoomLevel] = useState(100);
+  const [panBounds, setPanBounds] = useState<PanBounds>({ minX: -100, minY: -100, maxX: 100, maxY: 100 });
   const imageRef = useRef<HTMLImageElement | null>(null);
+
+  const calculatePanBounds = useCallback(
+    (img: HTMLImageElement | null) => {
+      if (!img || size.width <= 0 || size.height <= 0) {
+        setPanBounds({ minX: -100, minY: -100, maxX: 100, maxY: 100 });
+        return;
+      }
+
+      const scale = Math.min(size.width / img.width, size.height / img.height);
+      const imageWidth = img.width * scale;
+      const imageHeight = img.height * scale;
+      const imageX = (size.width - imageWidth) / 2;
+      const imageY = (size.height - imageHeight) / 2;
+
+      // Calculate bounds to allow showing the full image while preventing over-pan
+      // Negative values allow panning image left/up, positive values allow panning right/down
+      const minX = -(imageWidth - size.width / 2);
+      const minY = -(imageHeight - size.height / 2);
+      const maxX = imageX + size.width / 2;
+      const maxY = imageY + size.height / 2;
+
+      setPanBounds({
+        minX: Math.min(minX, 0),
+        minY: Math.min(minY, 0),
+        maxX: Math.max(maxX, 0),
+        maxY: Math.max(maxY, 0),
+      });
+    },
+    [size.width, size.height]
+  );
 
   const draw = useCallback(
     (ctx: CanvasRenderingContext2D, img: HTMLImageElement | null) => {
@@ -69,17 +107,19 @@ export const PlanCanvasSkia: React.FC<PlanCanvasSkiaProps> = ({
     img.src = imageUri;
     img.onload = () => {
       imageRef.current = img;
+      calculatePanBounds(img);
       draw(ctx, img);
     };
     img.onerror = () => {
       imageRef.current = null;
+      calculatePanBounds(null);
       draw(ctx, null);
     };
     return () => {
       img.onload = null;
       img.onerror = null;
     };
-  }, [draw, imageUri]);
+  }, [draw, imageUri, calculatePanBounds]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -101,12 +141,14 @@ export const PlanCanvasSkia: React.FC<PlanCanvasSkiaProps> = ({
         const { width, height } = entry.contentRect;
         if (width > 0 && height > 0) {
           setSize({ width, height });
+          // Recalculate bounds on resize
+          calculatePanBounds(imageRef.current);
         }
       }
     });
     observer.observe(container);
     return () => observer.disconnect();
-  }, []);
+  }, [calculatePanBounds]);
 
   const handleClick = useCallback(
     (event: React.MouseEvent<HTMLCanvasElement>) => {
@@ -115,7 +157,8 @@ export const PlanCanvasSkia: React.FC<PlanCanvasSkiaProps> = ({
       const img = imageRef.current;
       if (!img) return;
       
-      const rect = event.currentTarget.getBoundingClientRect();
+      const canvas = event.currentTarget;
+      const rect = canvas.getBoundingClientRect();
       const clickX = event.clientX - rect.left;
       const clickY = event.clientY - rect.top;
       
@@ -126,14 +169,39 @@ export const PlanCanvasSkia: React.FC<PlanCanvasSkiaProps> = ({
       const imageX = (size.width - imageWidth) / 2;
       const imageY = (size.height - imageHeight) / 2;
       
-      // Calculate position relative to the image
-      const relativeX = clickX - imageX;
-      const relativeY = clickY - imageY;
-      
-      // Normalize to 0-1 range
+      // Get current transform state from TransformWrapper
+      const transformState = transformRef.current?.state;
+      if (!transformState) {
+        // Fallback: use the static calculation if no transform state available
+        const relativeX = clickX - imageX;
+        const relativeY = clickY - imageY;
+        const nx = Math.max(0, Math.min(1, relativeX / imageWidth));
+        const ny = Math.max(0, Math.min(1, relativeY / imageHeight));
+        onPinPlaced({ x: nx, y: ny });
+        return;
+      }
+
+      const currentScale = transformState.scale;
+      const currentPosX = transformState.positionX;
+      const currentPosY = transformState.positionY;
+
+      // Reverse the transform: account for pan offset and zoom scale
+      // 1. Remove pan offset
+      const unpannedX = clickX - currentPosX;
+      const unpannedY = clickY - currentPosY;
+
+      // 2. Remove zoom (divide by scale)
+      const unzoomedX = unpannedX / currentScale;
+      const unzoomedY = unpannedY / currentScale;
+
+      // 3. Convert to image-relative coordinates
+      const relativeX = unzoomedX - imageX;
+      const relativeY = unzoomedY - imageY;
+
+      // 4. Normalize to 0-1 range
       const nx = Math.max(0, Math.min(1, relativeX / imageWidth));
       const ny = Math.max(0, Math.min(1, relativeY / imageHeight));
-      
+
       onPinPlaced({ x: nx, y: ny });
     },
     [isPlacePinMode, onPinPlaced, size.height, size.width]
@@ -146,6 +214,7 @@ export const PlanCanvasSkia: React.FC<PlanCanvasSkiaProps> = ({
 
   return (
     <TransformWrapper
+      ref={transformRef}
       initialScale={1}
       minScale={0.5}
       maxScale={5}
@@ -154,13 +223,15 @@ export const PlanCanvasSkia: React.FC<PlanCanvasSkiaProps> = ({
       doubleClick={{ disabled: false, step: 0.7 }}
       panning={{ velocityDisabled: true, disabled: false }}
       limitToBounds={true}
-      minPositionX={-100}
-      minPositionY={-100}
-      maxPositionX={100}
-      maxPositionY={100}
+      minPositionX={panBounds.minX}
+      minPositionY={panBounds.minY}
+      maxPositionX={panBounds.maxX}
+      maxPositionY={panBounds.maxY}
       onZoom={(e) => {
-        transformRef.current.scale = e.state.scale;
         setZoomLevel(Math.round(e.state.scale * 100));
+      }}
+      onTransformed={(ref) => {
+        transformRef.current = ref;
       }}
     >
       {({ zoomIn, zoomOut, resetTransform }) => (

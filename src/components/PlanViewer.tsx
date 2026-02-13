@@ -11,6 +11,13 @@ interface Props {
   onSelectLocation: (coords: { x: number; y: number; page: number }) => void;
 }
 
+interface PanBounds {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
 export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -21,6 +28,7 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
   const [imagePlan, setImagePlan] = useState<string | null>(null);
   const [planDimensions, setPlanDimensions] = useState<{ width: number; height: number } | null>(null);
   const [currentTransform, setCurrentTransform] = useState({ positionX: 0, positionY: 0, scale: 1 });
+  const [panBounds, setPanBounds] = useState<PanBounds>({ minX: -1000, minY: -1000, maxX: 1000, maxY: 1000 });
 
   // PDF State
   const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null);
@@ -32,6 +40,52 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
   const isPdf = Boolean(planUrl && planUrl.toLowerCase().endsWith('.pdf'));
   const totalPages = planUrl ? (isPdf ? (pdfDoc?.numPages || 0) : imagePlan ? 1 : 0) : 0;
   const currentPageNumber = totalPages ? currentPage + 1 : 1;
+
+  // Calculate pan bounds based on container and content dimensions
+  const calculatePanBounds = () => {
+    if (!containerRef.current || !planDimensions) {
+      setPanBounds({ minX: -1000, minY: -1000, maxX: 1000, maxY: 1000 });
+      return;
+    }
+
+    const containerRect = containerRef.current.getBoundingClientRect();
+    const containerWidth = containerRect.width;
+    const containerHeight = containerRect.height;
+
+    if (containerWidth <= 0 || containerHeight <= 0 || planDimensions.width <= 0 || planDimensions.height <= 0) {
+      setPanBounds({ minX: -1000, minY: -1000, maxX: 1000, maxY: 1000 });
+      return;
+    }
+
+    // Calculate aspect ratio and scaling
+    const containerAspect = containerWidth / containerHeight;
+    const contentAspect = planDimensions.width / planDimensions.height;
+
+    let scaledWidth = planDimensions.width;
+    let scaledHeight = planDimensions.height;
+
+    // Scale content to fit container while maintaining aspect ratio
+    if (contentAspect > containerAspect) {
+      scaledWidth = containerWidth;
+      scaledHeight = containerWidth / contentAspect;
+    } else {
+      scaledHeight = containerHeight;
+      scaledWidth = containerHeight * contentAspect;
+    }
+
+    // Calculate bounds to allow showing the full image while preventing over-pan
+    const maxPanX = Math.max(0, scaledWidth - containerWidth / 2);
+    const maxPanY = Math.max(0, scaledHeight - containerHeight / 2);
+    const minPanX = -maxPanX;
+    const minPanY = -maxPanY;
+
+    setPanBounds({
+      minX: minPanX,
+      minY: minPanY,
+      maxX: maxPanX,
+      maxY: maxPanY,
+    });
+  };
 
   // Calculate markers with GLOBAL index
   const markers = useMemo(
@@ -46,6 +100,24 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
         .map((s) => ({ id: s.id, x: s.plan_x as number, y: s.plan_y as number, title: s.title, index: s.friendly_id })),
     [snags, currentPageNumber],
   );
+
+  // Update pan bounds when dimensions change
+  useEffect(() => {
+    calculatePanBounds();
+  }, [planDimensions]);
+
+  // Update pan bounds on container resize
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    
+    const resizeObserver = new ResizeObserver(() => {
+      calculatePanBounds();
+    });
+    resizeObserver.observe(container);
+    
+    return () => resizeObserver.disconnect();
+  }, []);
 
   // Load PDF Document
   useEffect(() => {
@@ -231,7 +303,11 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
             panning={{
               velocityDisabled: true,
             }}
-            limitToBounds
+            limitToBounds={true}
+            minPositionX={panBounds.minX}
+            minPositionY={panBounds.minY}
+            maxPositionX={panBounds.maxX}
+            maxPositionY={panBounds.maxY}
             centerZoomedOut
             doubleClick={{ disabled: true }}
             onTransformed={(ref, state) => {
