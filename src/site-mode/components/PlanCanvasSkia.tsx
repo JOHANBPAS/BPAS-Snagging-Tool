@@ -230,7 +230,7 @@ export const PlanCanvasSkia: React.FC<PlanCanvasSkiaProps> = ({
   );
 
   const canvasStyle = useMemo(
-    () => ({ width: "100%", height: "100%", display: "block", imageRendering: "crisp-edges" }),
+    () => ({ width: "100%", height: "100%", display: "block" }),
     []
   );
 
