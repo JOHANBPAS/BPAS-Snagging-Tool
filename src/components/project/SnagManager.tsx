@@ -4,6 +4,7 @@ import { SnagDetailModal } from '../SnagDetailModal';
 import { SnagForm } from '../SnagForm';
 // import { supabase } from '../../lib/supabaseClient'; // Removed
 import { ChecklistField, Project, Snag } from '../../types';
+import { sortSnagsByCreatedAtDesc } from '../../lib/snagSort';
 // import { Database } from '../../types/supabase';
 import { useOfflineStatus } from '../../hooks/useOfflineStatus';
 // import { queueMutation } from '../../services/offlineStorage'; // Removed
@@ -43,7 +44,7 @@ export const SnagManager: React.FC<Props> = ({
     const [deleteId, setDeleteId] = useState<string | null>(null);
 
     const filteredSnags = useMemo(() => {
-        return snags.filter((snag) => {
+        const filtered = snags.filter((snag) => {
             const matchesSearch =
                 snag.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 snag.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -51,6 +52,8 @@ export const SnagManager: React.FC<Props> = ({
             const matchesStatus = statusFilter === 'all' || snag.status === statusFilter;
             return matchesSearch && matchesStatus;
         });
+
+        return sortSnagsByCreatedAtDesc(filtered);
     }, [snags, searchQuery, statusFilter]);
 
     const confirmDelete = (snag: Snag) => {

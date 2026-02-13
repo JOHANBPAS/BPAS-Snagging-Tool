@@ -2,6 +2,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, AlignmentType, PageBreak, ImageRun } from 'docx';
 import { brandAssets, brandColors } from '../lib/brand';
+import { sortSnagsByCreatedAtDesc } from '../lib/snagSort';
 import { getProjectPlans, getSnagPhotos } from './dataService';
 import { Project, Snag } from '../types';
 
@@ -551,16 +552,7 @@ export const generateReport = async ({ project, snags, onProgress, generatedBy }
     onProgress?.('Processing floor plans...');
     await yieldToMain();
 
-    // Sort snags by floor page then creation date for consistent numbering
-    const sortedSnags = [...snags].sort((a, b) => {
-        // Group by plan ID first if available
-        if (a.plan_id !== b.plan_id) return (a.plan_id || '').localeCompare(b.plan_id || '');
-
-        const pageA = a.plan_page ?? 999; // Put unplaced snags last
-        const pageB = b.plan_page ?? 999;
-        if (pageA !== pageB) return pageA - pageB;
-        return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
-    });
+    const sortedSnags = sortSnagsByCreatedAtDesc(snags);
 
     // Map snags to sequential numbers (1, 2, 3...) based on their order in the report
     const snagIndexMap = new Map<string, number>();
@@ -1154,13 +1146,7 @@ export const generateWordReport = async ({ project, snags, onProgress, generated
             img.src = planDataUrl;
         });
 
-    const sortedSnags = [...snags].sort((a, b) => {
-        if (a.plan_id !== b.plan_id) return (a.plan_id || '').localeCompare(b.plan_id || '');
-        const pageA = a.plan_page ?? 999;
-        const pageB = b.plan_page ?? 999;
-        if (pageA !== pageB) return pageA - pageB;
-        return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
-    });
+    const sortedSnags = sortSnagsByCreatedAtDesc(snags);
 
     const snagIndexMap = new Map<string, number>();
     sortedSnags.forEach((s, i) => snagIndexMap.set(s.id, i + 1));

@@ -37,8 +37,8 @@ export const PlanCanvasSkia: React.FC<PlanCanvasSkiaProps> = ({
   const [panBounds, setPanBounds] = useState<PanBounds>({ minX: -100, minY: -100, maxX: 100, maxY: 100 });
   const imageRef = useRef<HTMLImageElement | null>(null);
   
-  // Use 4x DPI for maximum sharpness
-  const dpiScale = 4;
+  // Use 8x DPI for maximum sharpness
+  const dpiScale = 8;
 
   const calculatePanBounds = useCallback(
     (img: HTMLImageElement | null, zoomScale: number = 1) => {
