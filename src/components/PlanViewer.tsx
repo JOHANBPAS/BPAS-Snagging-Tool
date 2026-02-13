@@ -44,7 +44,8 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
   // Calculate pan bounds based on container and content dimensions
   const calculatePanBounds = (zoomScale: number = currentTransform.scale) => {
     if (!containerRef.current || !planDimensions) {
-      setPanBounds({ minX: -10000, minY: -10000, maxX: 10000, maxY: 10000 });
+      // Very generous bounds to allow full panning
+      setPanBounds({ minX: -50000, minY: -50000, maxX: 50000, maxY: 50000 });
       return;
     }
 
@@ -53,39 +54,24 @@ export const PlanViewer: React.FC<Props> = ({ planUrl, snags, onSelectLocation }
     const containerHeight = containerRect.height;
 
     if (containerWidth <= 0 || containerHeight <= 0 || planDimensions.width <= 0 || planDimensions.height <= 0) {
-      setPanBounds({ minX: -10000, minY: -10000, maxX: 10000, maxY: 10000 });
+      setPanBounds({ minX: -50000, minY: -50000, maxX: 50000, maxY: 50000 });
       return;
     }
 
-    // Calculate how much space is available for panning at current zoom scale
-    // When at zoom level 1, the image fits in the container
-    // At zoom > 1, the image is larger and can pan
-    // At zoom < 1, the image is smaller
-    
-    // Calculate the effective rendered image size at this zoom level
-    const aspect = planDimensions.width / planDimensions.height;
-    let renderedWidth = containerWidth;
-    let renderedHeight = containerWidth / aspect;
-    
-    if (renderedHeight > containerHeight) {
-      renderedHeight = containerHeight;
-      renderedWidth = containerHeight * aspect;
-    }
-    
-    // Scale by current zoom
-    const scaledWidth = renderedWidth * zoomScale;
-    const scaledHeight = renderedHeight * zoomScale;
-    
-    // Calculate how much we can pan in each direction
-    // Allow panning so the entire image can be viewed
-    const maxPanX = Math.max(0, (scaledWidth - containerWidth) / 2);
-    const maxPanY = Math.max(0, (scaledHeight - containerHeight) / 2);
+    // Use very generous pan bounds that allow seeing the entire image at any zoom
+    // The actual image edge geometry will prevent over-panning
+    const maxExtent = Math.max(
+      Math.abs(planDimensions.width * zoomScale),
+      Math.abs(planDimensions.height * zoomScale),
+      containerWidth,
+      containerHeight
+    ) * 2;
     
     setPanBounds({
-      minX: -maxPanX,
-      minY: -maxPanY,
-      maxX: maxPanX,
-      maxY: maxPanY,
+      minX: -maxExtent,
+      minY: -maxExtent,
+      maxX: maxExtent,
+      maxY: maxExtent,
     });
   };
 
