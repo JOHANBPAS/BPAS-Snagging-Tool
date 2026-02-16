@@ -1,29 +1,28 @@
 # BPAS Snagging App
 
-A mobile-first React + TypeScript + Vite frontend powered by Supabase (PostgreSQL, Auth, Storage) for capturing, tracking, and reporting construction snags.
+A mobile-first React + TypeScript + Vite frontend powered by Firebase (Auth, Firestore, Storage) for capturing, tracking, and reporting construction snags.
 
 ## Architecture & file structure
 
 - `src/`
   - `App.tsx` – routing + protected layout
   - `components/` – UI building blocks (layout, lists, plan viewer, uploads, reports)
-  - `hooks/useAuth.tsx` – Supabase auth + profile context
-  - `lib/` – Supabase client and generated database types
+  - `hooks/useAuth.tsx` – Firebase auth + profile context
+  - `lib/` – Firebase client and shared helpers
   - `pages/` – Dashboard, Projects, Project detail, Settings, Auth screens
   - `types/` – shared TypeScript domain models
-- `supabase/schema.sql` – database tables + RLS policies
 - `.env.example` – environment variables
 - `tailwind.config.cjs` / `postcss.config.cjs` – styling
 
 ## Key features implemented
 
-- Supabase email/password auth with profile bootstrap
+- Firebase email/password auth with profile bootstrap
 - Projects CRUD with template-aware snag forms
 - Snag lifecycle (open → in progress → completed → verified), quick capture, assignment, due dates, categories
-- Multiple photos per snag (Supabase Storage), comment threads, activity log stub
+- Multiple photos per snag (Firebase Storage), comment threads, activity log stub
 - Floor plan upload & pin-based snag placement (normalized coordinates)
 - Dashboard with project cards and status breakdown chart
-- Automated PDF export (jsPDF + autotable) uploaded to Supabase Storage with public link
+- Automated PDF export (jsPDF + autotable) uploaded to Firebase Storage with public link
 - Checklist templates (fields pulled into snag form)
 - Mobile-first Tailwind UI with loading/error awareness
 

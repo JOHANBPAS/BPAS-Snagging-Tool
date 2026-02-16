@@ -16,12 +16,12 @@ This document outlines the testing strategy for the BPAS Snagging Tool. It cover
 
 ### Local Development
 - **URL:** `http://localhost:5173`
-- **Database:** Local Supabase instance or linked development Supabase project.
+- **Database:** Firebase Emulator Suite or a linked development Firebase project.
 - **Browser:** Latest Chrome/Edge (primary), Firefox/Safari (secondary).
 
 ### Staging (Recommended)
 - **URL:** [https://bpas-snagging-tool.vercel.app](https://bpas-snagging-tool.vercel.app)
-- **Database:** Dedicated Staging Supabase project (separate from Production).
+- **Database:** Dedicated Staging Firebase project (separate from Production).
 - **Purpose:** Final verification before production deployment, sharing with stakeholders.
 
 ---

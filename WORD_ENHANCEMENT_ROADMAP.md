@@ -11,7 +11,7 @@
 // ✅ IMPLEMENTATION COMPLETE
 // ======================================
 //
-// Phase 1: Supabase Cleanup - COMPLETE
+// Phase 1: Legacy Backend Cleanup - COMPLETE
 // Phase 2: Testing + MIME + Branding - COMPLETE
 // Phase 3A: Photo Integration - COMPLETE
 // Phase 3B: Floor Plan Integration - COMPLETE

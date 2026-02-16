@@ -542,38 +542,6 @@ export const deleteProject = functions.https.onCall(async (data, context) => {
 });
 ```
 
-## Migration from Supabase
-
-If migrating from Supabase to Firebase:
-
-1. **Export data from Supabase**:
-   - Use Supabase SQL dump or REST API
-   - Convert schema to Firestore document structure
-   - Map table rows to collection documents
-
-2. **Transform data for Firestore**:
-   - Flatten relationships (Supabase uses normalized tables)
-   - Convert timestamps to Firestore Timestamps
-   - Map UIDs and foreign keys appropriately
-
-3. **Import to Firestore**:
-   ```typescript
-   const data = require('./supabase-export.json');
-   const batch = writeBatch(db);
-   
-   data.projects.forEach(project => {
-     const projectRef = doc(collection(db, 'projects'), project.id);
-     batch.set(projectRef, project);
-   });
-   
-   await batch.commit();
-   ```
-
-4. **Update client configuration**:
-   - Replace `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` with `VITE_FIREBASE_CONFIG`
-   - Update imports from `@supabase/supabase-js` to Firebase SDK
-   - Update query patterns to Firestore API
-
 ## Best Practices
 
 1. **Denormalize strategically**: Store frequently accessed data (e.g., assignee name, snag count) in parent documents to avoid subcollection reads

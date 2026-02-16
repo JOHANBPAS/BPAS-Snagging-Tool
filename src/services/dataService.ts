@@ -211,8 +211,8 @@ export const deleteProjectPlan = async (projectId: string, planId: string) => {
 };
 
 // --- Reports (Global or per Project) ---
-// Using root collection 'project_reports' for simplicity to match Supabase table styles for now, 
-// or could be subcollections. Given the global view requirements, root collection with project_id field is easiest.
+// Using root collection 'project_reports' for simplicity. Given the global view requirements,
+// a root collection with project_id field is easiest.
 
 export const getReports = async (): Promise<any[]> => {
     const reportsCol = collection(db, 'project_reports');
@@ -374,7 +374,7 @@ export const getUser = async (userId: string): Promise<Profile | null> => {
 
 export const getChecklistFields = async (templateId: string): Promise<any[]> => {
     // Assuming templates are in 'templates' collection and fields in subcollection
-    // Or if fields are in 'checklist_template_fields' top level (as per original Supabase SQL)
+    // Or if fields are in 'checklist_template_fields' top level (as per legacy SQL)
     // Detailed plan proposed 'templates/{templateId}'
     // We will assume fields are subcollection for now, OR we need to migrate them to subcollection.
     // Given we haven't migrated data yet, we can choose. Subcollection is cleaner.

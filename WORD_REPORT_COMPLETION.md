@@ -9,13 +9,13 @@
 2. ✅ Match PDF styling in Word reports
 3. ✅ Add photo integration (newest photo per snag)
 4. ✅ Add floor plan rendering with snag markers
-5. ✅ Remove all Supabase references
+5. ✅ Remove all legacy backend references
 6. ✅ Add comprehensive testing
 
 ## 📋 Implementation Summary
 
-### Phase 1: Supabase Cleanup ✅
-- Removed all Supabase dead code and dependencies
+### Phase 1: Legacy Backend Cleanup ✅
+- Removed all legacy backend dead code and dependencies
 - Updated documentation to reflect Firebase architecture
 - Created comprehensive Firebase Architecture Guide (600+ lines)
 

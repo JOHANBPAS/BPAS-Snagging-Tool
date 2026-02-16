@@ -2,12 +2,9 @@ import React, { useState, useMemo } from 'react';
 import { SnagList } from '../SnagList';
 import { SnagDetailModal } from '../SnagDetailModal';
 import { SnagForm } from '../SnagForm';
-// import { supabase } from '../../lib/supabaseClient'; // Removed
 import { ChecklistField, Project, Snag } from '../../types';
 import { sortSnagsByCreatedAtDesc } from '../../lib/snagSort';
-// import { Database } from '../../types/supabase';
 import { useOfflineStatus } from '../../hooks/useOfflineStatus';
-// import { queueMutation } from '../../services/offlineStorage'; // Removed
 import { deleteSnag, getSnagPhotos, deleteSnagPhoto, deleteFile } from '../../services/dataService';
 
 interface Props {

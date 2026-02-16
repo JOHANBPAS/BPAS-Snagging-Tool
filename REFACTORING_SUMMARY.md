@@ -310,8 +310,6 @@ const priorityColors = {
 
 ### Related Files (No changes needed)
 - `src/lib/brand.ts` - Brand colors and assets (existing)
-- `src/lib/types.ts` - Data types (existing)
-- `src/types/supabase.ts` - Database types (existing)
 
 ---
 
